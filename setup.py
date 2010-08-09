@@ -23,11 +23,11 @@ from setuptools import setup
 
 setup(
     name='couchable',
-    version='0.0.1a2',
+    version='0.0.1a3',
     author='Eli Stevens',
     author_email='wickedgrey@gmail.com',
     url='http://github.com/wickedgrey/couchable',
-    description='An ORM (OCM?) that allows arbitrary python objects to be stored in CouchDB, while keeping the resulting CouchDB document as "natural" as possible.',
+    description='Allows arbitrary python objects to be stored in CouchDB, while keeping the resulting CouchDB document as "natural" as possible.',
     packages=['couchable',],
     install_requires=[
             'CouchDb >= 0.7',
