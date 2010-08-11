@@ -158,9 +158,8 @@ def findHandler(cls_or_name, handler_dict):
 
 class CouchableDb(object):
     """
-    >>> import couchable
-    >>> cdb=couchable.CouchableDb('testing')
-    >>> class SimpleDoc(couchable.CouchableDoc):
+    >>> cdb=CouchableDb('testing')
+    >>> class SimpleDoc(CouchableDoc):
     ...     def __init__(self, **kwargs):
     ...         for name, value in kwargs.items():
     ...             setattr(self, name, value)
@@ -187,9 +186,9 @@ class CouchableDb(object):
                 server = couchdb.Server(url)
                 
             try:
-                db = server['pykour']
+                db = server[name]
             except:
-                db = server.create('pykour')
+                db = server.create(name)
         
         assert db not in self._wrapper_cache
         
@@ -212,6 +211,7 @@ class CouchableDb(object):
         # Actually (finally) send the data to couchdb.
         try:
             #pprint.pprint([(x[0]._id, getattr(x[0], '_rev', None)) for x in self._done_dict.values()])
+            #print datetime.datetime.now(), "214: self.db.update"
             ret_list = self.db.update([x[1] for x in self._done_dict.values()])
         except:
             #print self._done_dict.values()
@@ -222,6 +222,7 @@ class CouchableDb(object):
             obj, doc, attachment_list = store_tuple
             if success:
                 for content, content_name, content_type in attachment_list:
+                    #print datetime.datetime.now(), "225: self.db.put_attachment"
                     self.db.put_attachment(doc, content, content_name, content_type)
                     
                 # This is important, even if there are no attachments
@@ -546,8 +547,8 @@ class CouchableDb(object):
             for k,v in data.items() if k not in private_keys and k != '_attachments'}
             
         if private_keys:
-            doc.setdefault(FIELD_NAME, {})
-            doc[FIELD_NAME]['private'] = {self._pack(parent_doc, k, attachment_list, '{}>{}'.format(name, str(k)), True):
+            parent_doc.setdefault(FIELD_NAME, {})
+            parent_doc[FIELD_NAME]['private'] = {self._pack(parent_doc, k, attachment_list, '{}>{}'.format(name, str(k)), True):
                 self._pack(parent_doc, v, attachment_list, '{}.{}'.format(name, str(k)), False)
                 for k,v in data.items() if k in private_keys}
 
@@ -595,6 +596,7 @@ class CouchableDb(object):
                             # FIXME: error?
                             print type_str, data, _attachment_handlers
                         
+                        #print datetime.datetime.now(), "599: self.db.get_attachment"
                         attachment_response = self.db.get_attachment(parent_doc, data)
                         return handler_tuple[1](attachment_response.read())
                     else:
@@ -685,6 +687,7 @@ class CouchableDb(object):
     def _load(self, _id, loaded_dict):
         if _id not in loaded_dict:
             #try:
+                #print datetime.datetime.now(), "690: self.db[_id]"
                 loaded_dict[_id] = self.db[_id]
             #except:
             #    print "problem:", _id

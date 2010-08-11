@@ -25,6 +25,7 @@ import doctest
 import gc
 import random
 import sys
+import time
 import unittest
 
 # 3rd party packages
@@ -84,6 +85,7 @@ class TestCouchable(unittest.TestCase):
         self.server = couchdb.Server()
         try:
             self.server.delete('testing')
+            pass
         except:
             pass
         
@@ -102,6 +104,7 @@ class TestCouchable(unittest.TestCase):
     def tearDown(self):
         del self.simple_dict
     
+    #@unittest.skip('''Playing with ouput''')
     @dumpcdb
     def test_docs(self):
         # doctest returns a tuple of (failed, attempted)
@@ -125,7 +128,7 @@ class TestCouchable(unittest.TestCase):
             self.assertEqual(getattr(obj, key), value)
 
     @dumpcdb
-    def test_zLast_nonStrKeys(self):
+    def test_nonStrKeys(self):
         d = {1234:'ints', (1,2,3,4):'tuples', frozenset([1,1,2,2,3,3]): 'frozenset'}
         
         obj = Simple(d=d)
@@ -137,9 +140,24 @@ class TestCouchable(unittest.TestCase):
         
         obj = self.cdb.load(_id)
         
+        self.assertEqual(type(obj), Simple)
+        
         for key, value in d.items():
             self.assertIn(key, obj.d)
             self.assertEqual(obj.d[key], value)
+
+    @dumpcdb
+    def test_private(self):
+        a = SimpleDoc(name='AAA', _implementationDetail='foo')
+
+        a_id = self.cdb.store(a)
+        
+        del a
+        self.assertFalse(self.cdb._obj_by_id)
+        
+        a = self.cdb.load(a_id)
+        
+        self.assertEqual(type(a), SimpleDoc)
 
 
     @dumpcdb
@@ -223,6 +241,18 @@ class TestCouchable(unittest.TestCase):
             
         finally:
             sys.setrecursionlimit(limit)
+            
+    @unittest.skip("""This fails intermittently.  I suspect a problem with the base couchdb library, but I can't pin it down yet.""")
+    @dumpcdb
+    def test_wait(self):
+        a = SimpleDoc(name='AAA')
+        a_id = self.cdb.store(a)
+    
+        time.sleep(300)
+        
+        b = SimpleDoc(name='BBB', a=a)
+        b_id = self.cdb.store(b)
+        
     
     @unittest.skip("""still implementing tests for this...""")
     @dumpcdb
