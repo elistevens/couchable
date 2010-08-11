@@ -99,7 +99,7 @@ class UncouchableException(Exception):
         self.obj = obj
 
 # type packing / unpacking
-_pack_visitors = collections.OrderedDict()
+_pack_handlers = collections.OrderedDict()
 def _packer(*args):
     def func(func_):
         for type_ in args:
@@ -108,10 +108,10 @@ def _packer(*args):
     return func
 
 def packer(type_, func_):
-    _pack_visitors[type_] = func_
-    _pack_visitors[typestr(type_)] = func_
+    _pack_handlers[type_] = func_
+    _pack_handlers[typestr(type_)] = func_
 
-_unpack_visitors = collections.OrderedDict()
+_unpack_handlers = collections.OrderedDict()
 def _unpacker(*args):
     def func(func_):
         for type_ in args:
@@ -120,13 +120,13 @@ def _unpacker(*args):
     return func
 
 def unpacker(type_, func_):
-    _unpack_visitors[type_] = func_
-    _unpack_visitors[typestr(type_)] = func_
+    _unpack_handlers[type_] = func_
+    _unpack_handlers[typestr(type_)] = func_
 
 
 
-# function for navigating the above dics of visitors, etc.
-def findVisitor(cls_or_name, visitor_dict):
+# function for navigating the above dics of handlers, etc.
+def findHandler(cls_or_name, handler_dict):
     """
     >>> class A(object): pass
     ... 
@@ -134,32 +134,63 @@ def findVisitor(cls_or_name, visitor_dict):
     ... 
     >>> class C(object): pass
     ... 
-    >>> visitors={A:'AAA'}
-    >>> findVisitor(A, visitors)
+    >>> handlers={A:'AAA'}
+    >>> findHandler(A, handlers)
     (<class 'couchable.core.A'>, 'AAA')
-    >>> findVisitor(B, visitors)
+    >>> findHandler(B, handlers)
     (<class 'couchable.core.A'>, 'AAA')
-    >>> findVisitor(C, visitors)
+    >>> findHandler(C, handlers)
     (None, None)
     """
     #if isinstance(cls_or_name, basestring):
-    #    for type_, visitor in reversed(visitor_dict.items()):
+    #    for type_, handler in reversed(handler_dict.items()):
     #        if cls_or_name == str(type_):
-    #            return type_, visitor
+    #            return type_, handler
     #el
-    if cls_or_name in visitor_dict:
-        return cls_or_name, visitor_dict[cls_or_name]
+    if cls_or_name in handler_dict:
+        return cls_or_name, handler_dict[cls_or_name]
     else:
-        for type_, visitor in reversed(visitor_dict.items()):
+        for type_, handler in reversed(handler_dict.items()):
             if isinstance(type_, type) and issubclass(cls_or_name, type_):
-                return type_, visitor
+                return type_, handler
     
     return None, None
 
 class CouchableDb(object):
+    """
+    >>> import couchable
+    >>> cdb=couchable.CouchableDb('testing')
+    >>> class SimpleDoc(couchable.CouchableDoc):
+    ...     def __init__(self, **kwargs):
+    ...         for name, value in kwargs.items():
+    ...             setattr(self, name, value)
+    ... 
+    >>> a = SimpleDoc(name='AAA')
+    >>> b = SimpleDoc(name='BBB', a=a)
+    >>> c = SimpleDoc(name='CCC', a=a)
+    >>> id_list = cdb.store([b, c])
+    >>> id_list
+    ['...SimpleDoc:...', '...SimpleDoc:...']
+    >>> b, c = cdb.load(id_list)
+    >>> assert b.a is c.a
+    >>> cdb.db[b._id]
+    <Document '...SimpleDoc:...'@'...' {'a': 'couchable:id:...SimpleDoc:...', 'couchable:': {'class': 'SimpleDoc', 'module': '...'}, 'name': 'BBB'}>
+    """
+    
     _wrapper_cache = weakref.WeakValueDictionary()
     
-    def __init__(self, db):
+    def __init__(self, name=None, url=None, db=None):
+        if db is None:
+            if url is None:
+                server = couchdb.Server()
+            else:
+                server = couchdb.Server(url)
+                
+            try:
+                db = server['pykour']
+            except:
+                db = server.create('pykour')
+        
         assert db not in self._wrapper_cache
         
         self._wrapper_cache[db] = self
@@ -214,7 +245,7 @@ class CouchableDb(object):
         if isinstance(obj, (CouchableDb, couchdb.client.Server, couchdb.client.Database)):
             raise UncouchableException("Illegal to attempt to store objects of type", type(obj), obj)
             
-        base_cls, func_tuple = findVisitor(type(obj), _couchable_types)
+        base_cls, func_tuple = findHandler(type(obj), _couchable_types)
         if func_tuple:
             func_tuple[0](obj, self)
 
@@ -237,17 +268,17 @@ class CouchableDb(object):
     def _pack(self, parent_doc, data, attachment_list, name, isKey=False):
         cls = type(data)
         
-        base_cls, visitor = findVisitor(cls, _pack_visitors)
+        base_cls, handler = findHandler(cls, _pack_handlers)
         
-        if visitor:
-            return visitor(self, parent_doc, data, attachment_list, name, isKey)
+        if handler:
+            return handler(self, parent_doc, data, attachment_list, name, isKey)
         else:
             raise UncouchableException("No _packer for type", cls, data)
         
-        #if cls in _pack_visitors:
-        #    return _pack_visitors[cls](self, parent_doc, data, attachment_list, name, isKey)
+        #if cls in _pack_handlers:
+        #    return _pack_handlers[cls](self, parent_doc, data, attachment_list, name, isKey)
         #else:
-        #    for types, func in reversed(_pack_visitors.items()):
+        #    for types, func in reversed(_pack_handlers.items()):
         #        if isinstance(data, types):
         #            return func(self, parent_doc, data, attachment_list, name, isKey)
         #            break
@@ -256,7 +287,7 @@ class CouchableDb(object):
                 
     def _obj2doc_empty(self, data):
         """
-        >>> cdb=CouchableDb(couchdb.Server()['testing'])
+        >>> cdb=CouchableDb('testing')
         >>> obj = object()
         >>> pprint.pprint(cdb._obj2doc_empty(obj))
         {'couchable:': {'class': 'object', 'module': '__builtin__'}}
@@ -270,7 +301,7 @@ class CouchableDb(object):
     
     def _obj2doc_consargs(self, data, args=None, kwargs=None):
         """
-        >>> cdb=CouchableDb(couchdb.Server()['testing'])
+        >>> cdb=CouchableDb('testing')
         >>> obj = tuple([1, 2, 3])
         >>> pprint.pprint(cdb._obj2doc_consargs(obj, list(obj), {}))
         {'couchable:': {'args': [1, 2, 3],
@@ -294,7 +325,7 @@ class CouchableDb(object):
     @_packer(object)
     def _pack_object(self, parent_doc, data, attachment_list, name, isKey):
         """
-        >>> cdb=CouchableDb(couchdb.Server()['testing'])
+        >>> cdb=CouchableDb('testing')
         >>> parent_doc = {}
         >>> attachment_list = []
         >>> class Foo(object):  
@@ -323,7 +354,7 @@ class CouchableDb(object):
                 'module': '__builtin__'}}}}}
         """
         cls = type(data)
-        base_cls, callback_tuple = findVisitor(cls, _couchable_types)
+        base_cls, callback_tuple = findHandler(cls, _couchable_types)
         
         if base_cls:
             self._store(data)
@@ -348,7 +379,7 @@ class CouchableDb(object):
     @_packer(str, unicode)
     def _pack_native(self, parent_doc, data, attachment_list, name, isKey):
         """
-        >>> cdb=CouchableDb(couchdb.Server()['testing'])
+        >>> cdb=CouchableDb('testing')
         >>> parent_doc = {}
         >>> attachment_list = []
         
@@ -377,7 +408,7 @@ class CouchableDb(object):
     @_packer(int, long, float)
     def _pack_native_keyAsRepr(self, parent_doc, data, attachment_list, name, isKey):
         """
-        >>> cdb=CouchableDb(couchdb.Server()['testing'])
+        >>> cdb=CouchableDb('testing')
         >>> parent_doc = {}
         >>> attachment_list = []
         >>> data = 1234
@@ -399,7 +430,7 @@ class CouchableDb(object):
     @_packer(tuple, frozenset)
     def _pack_consargs_keyAsKey(self, parent_doc, data, attachment_list, name, isKey):
         """
-        >>> cdb=CouchableDb(couchdb.Server()['testing'])
+        >>> cdb=CouchableDb('testing')
         >>> parent_doc = {}
         >>> attachment_list = []
 
@@ -454,7 +485,7 @@ class CouchableDb(object):
     @_packer(list)
     def _pack_list_noKey(self, parent_doc, data, attachment_list, name, isKey):
         """
-        >>> cdb=CouchableDb(couchdb.Server()['testing'])
+        >>> cdb=CouchableDb('testing')
         >>> parent_doc = {}
         >>> attachment_list = []
 
@@ -479,7 +510,7 @@ class CouchableDb(object):
     @_packer(dict)
     def _pack_dict_keyMeansObject(self, parent_doc, data, attachment_list, name, isObjDict):
         """
-        >>> cdb=CouchableDb(couchdb.Server()['testing'])
+        >>> cdb=CouchableDb('testing')
         >>> parent_doc = {}
         >>> attachment_list = []
 
@@ -525,11 +556,11 @@ class CouchableDb(object):
     def _pack_attachment(self, parent_doc, data, attachment_list, name, isKey):
         cls = type(data)
         
-        base_cls, visitor_tuple = findVisitor(cls, _attachment_visitors)
+        base_cls, handler_tuple = findHandler(cls, _attachment_handlers)
         
-        content = visitor_tuple[0](data)
+        content = handler_tuple[0](data)
         
-        attachment_list.append((content, name, visitor_tuple[2]))
+        attachment_list.append((content, name, handler_tuple[2]))
         return '{}{}:{}:{}'.format(FIELD_NAME, 'attachment', typestr(base_cls), name)
 
     def _unpack(self, parent_doc, doc, loaded_dict, inst=None):
@@ -558,14 +589,14 @@ class CouchableDb(object):
                         return self._unpack(parent_doc, parent_doc[FIELD_NAME]['keys'][doc], loaded_dict)
     
                     elif method_str == 'attachment':
-                        base_cls, visitor_tuple = findVisitor(type_str, _attachment_visitors)
+                        base_cls, handler_tuple = findHandler(type_str, _attachment_handlers)
                         
                         if base_cls is None:
                             # FIXME: error?
-                            print type_str, data, _attachment_visitors
+                            print type_str, data, _attachment_handlers
                         
                         attachment_response = self.db.get_attachment(parent_doc, data)
-                        return visitor_tuple[1](attachment_response.read())
+                        return handler_tuple[1](attachment_response.read())
                     else:
                         # FIXME: error?
                         pass
@@ -669,7 +700,7 @@ class CouchableDb(object):
             #print self._obj_by_id.items()
             obj = self._unpack(doc, doc, loaded_dict, obj)
         
-        base_cls, func_tuple = findVisitor(type(obj), _couchable_types)
+        base_cls, func_tuple = findHandler(type(obj), _couchable_types)
         if func_tuple:
             func_tuple[1](obj, self)
             
@@ -726,7 +757,7 @@ def doGunzip(data):
     gz_file = gzip.GzipFile(mode='rb', fileobj=str_io)
     return gz_file.read()
     
-_attachment_visitors = collections.OrderedDict()
+_attachment_handlers = collections.OrderedDict()
 def registerAttachmentType(type_, pack_func, unpack_func, content_type, gzip=False):
     """
     Example: registerAttachmentType(CouchableAttachment, \
@@ -735,13 +766,13 @@ def registerAttachmentType(type_, pack_func, unpack_func, content_type, gzip=Fal
             'application/octet-stream')
     """
     if gzip:
-        visitor_tuple = (lambda data: doGzip(pack_func(data)), lambda data: unpack_func(doGunzip(data)), content_type)
+        handler_tuple = (lambda data: doGzip(pack_func(data)), lambda data: unpack_func(doGunzip(data)), content_type)
     else:
-        visitor_tuple = (pack_func, unpack_func, content_type)
+        handler_tuple = (pack_func, unpack_func, content_type)
 
     _packer(type_)(CouchableDb._pack_attachment)
-    _attachment_visitors[type_] = visitor_tuple
-    _attachment_visitors[typestr(type_)] = visitor_tuple
+    _attachment_handlers[type_] = handler_tuple
+    _attachment_handlers[typestr(type_)] = handler_tuple
 
 class CouchableAttachment(object):
     """

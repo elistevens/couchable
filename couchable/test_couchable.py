@@ -35,7 +35,7 @@ import couchable
 import couchable.core
 
 def dumpcdb(func):
-    def _func(self):
+    def test_dumpcdb_(self):
         try:
             func(self)
         except:
@@ -47,7 +47,7 @@ def dumpcdb(func):
                 
             raise
         
-    return _func
+    return test_dumpcdb_
 
 class Simple(object):
     def __init__(self, **kwargs):
@@ -87,7 +87,7 @@ class TestCouchable(unittest.TestCase):
         except:
             pass
         
-        self.cdb = couchable.CouchableDb(self.server.create('testing'))
+        self.cdb = couchable.CouchableDb('testing')
         
         self.simple_dict = {
             'int': 1,
@@ -105,7 +105,8 @@ class TestCouchable(unittest.TestCase):
     @dumpcdb
     def test_docs(self):
         # doctest returns a tuple of (failed, attempted)
-        self.assertEqual(doctest.testmod(couchable.core, optionflags=(doctest.REPORT_CDIFF | doctest.NORMALIZE_WHITESPACE))[0], 0)
+        self.assertEqual(doctest.testmod(couchable.core,
+                optionflags=(doctest.REPORT_CDIFF | doctest.NORMALIZE_WHITESPACE | doctest.ELLIPSIS))[0], 0)
 
 
     @dumpcdb
@@ -195,7 +196,7 @@ class TestCouchable(unittest.TestCase):
         limit = sys.getrecursionlimit()
         try:
             # This number might need to get tweaked if this test is failing; that's fine
-            sys.setrecursionlimit(70)
+            sys.setrecursionlimit(100)
             
             a = SimpleDoc(name='AAA')
             b = SimpleDoc(name='BBB', a=a)
