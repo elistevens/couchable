@@ -65,17 +65,25 @@ class SimpleAttachment(couchable.CouchableAttachment):
         for name, value in kwargs.items():
             setattr(self, name, value)
     
-# in progress...
 class AftermarketDoc(object):
     def __init__(self, **kwargs):
         for name, value in kwargs.items():
             setattr(self, name, value)
 
+couchable.registerDocType(AftermarketDoc,
+        preStore_func=(lambda obj, cdb: None),
+        postLoad_func=(lambda obj, cdb: None))
+
 class AftermarketAttachment(object):
     def __init__(self, **kwargs):
         for name, value in kwargs.items():
             setattr(self, name, value)
-# end in progress
+            
+couchable.registerAttachmentType(AftermarketAttachment,
+        serialize_func=(lambda obj: pickle.dumps(obj)),
+        deserialize_func=(lambda data: pickle.loads(data)),
+        content_type='application/octet-stream', gzip=False)
+
 
 class TestCouchable(unittest.TestCase):
 

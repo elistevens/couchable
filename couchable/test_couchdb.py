@@ -35,48 +35,6 @@ import couchdb
 #import couchable
 #import couchable.core
 
-#def dumpcdb(func):
-#    def test_dumpcdb_(self):
-#        try:
-#            func(self)
-#        except:
-#            for _id in sorted(self.cdb.db):
-#                print _id
-#                doc = self.cdb.db[_id]
-#                for key in sorted(doc):
-#                    print '{:>15}: {}'.format(key, doc[key])
-#                
-#            raise
-#        
-#    return test_dumpcdb_
-#
-#class Simple(object):
-#    def __init__(self, **kwargs):
-#        for name, value in kwargs.items():
-#            setattr(self, name, value)
-#
-#class SimpleDoc(couchable.CouchableDoc):
-#    def __init__(self, **kwargs):
-#        for name, value in kwargs.items():
-#            setattr(self, name, value)
-#
-#class SimpleAttachment(couchable.CouchableAttachment):
-#    def __init__(self, **kwargs):
-#        for name, value in kwargs.items():
-#            setattr(self, name, value)
-#    
-## in progress...
-#class AftermarketDoc(object):
-#    def __init__(self, **kwargs):
-#        for name, value in kwargs.items():
-#            setattr(self, name, value)
-#
-#class AftermarketAttachment(object):
-#    def __init__(self, **kwargs):
-#        for name, value in kwargs.items():
-#            setattr(self, name, value)
-## end in progress
-
 class TestCouchdb(unittest.TestCase):
     def setUp(self):
         self.server = couchdb.Server()

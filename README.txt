@@ -3,6 +3,69 @@ Currently requires:
 - CouchDB 0.11+ (untested on lower)
 - http://pypi.python.org/pypi/CouchDB 0.7+ (untested on lower)
 
+Example of Use
+===============
+
+import numpy
+import couchdb
+import couchable
+
+couchable.registerAttachmentType(numpy.ndarray,
+        lambda obj: obj.dumps(),
+        lambda data: numpy.loads(data),
+        'application/octet-stream', gzip=True)
+
+class BaseClass(object):
+    def __init__(self, shape, type_=numpy.uint16):
+        self.vol = numpy.zeros(shape, type_)
+    # ...
+
+
+class ClassA(object):
+    def __init__(self, name):
+        self.name = name
+    # ...
+couchable.registerDocType(ClassA,
+        lambda obj, cdb: couchable.newid(obj, lambda x: x.name),
+        lambda obj, cdb: None)
+
+
+class SubClassB(BaseClass):
+    def __init__(self, container):
+        BaseClass.__init__(self, container.vol.shape, numpy.float32, container.pixelLength_mm)
+        self.container = container
+    # ...
+couchable.registerDocType(SubClassB)
+
+
+class Container(BaseClass):
+    def __init__(self):
+        BaseClass.__init__(self, (300, 400, 200), numpy.bool_)
+    # ...
+couchable.registerDocType(Container)
+
+
+def main(options, arguments):
+    cdb = couchable.CouchableDb(options.cdb_name)
+
+    view = couchdb.design.ViewDefinition('generic', 'byclass',
+        '''
+        function(doc) {
+            if ('couchable:' in doc) {
+                info = doc['couchable:'];
+                emit([info.module, info.class, doc._id], doc);
+            }
+        }''')
+    view.sync(cdb.db)
+    
+    # ...
+
+    viewResult = view(cdb.db, include_docs=True, startkey=['example', 'Container'], endkey=['example', 'Container', {}])
+    container_list = cdb.load(viewResult.rows)
+
+    # ...
+
+
 Examples of the JSON Structure of Stored Objects
 ================================================
 

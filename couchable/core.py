@@ -108,6 +108,9 @@ def _packer(*args):
     return func
 
 def packer(type_, func_):
+    """
+    This function is still in potential flux.  Writing new (un)packers is delicate; please see the source.
+    """
     _pack_handlers[type_] = func_
     _pack_handlers[typestr(type_)] = func_
 
@@ -120,6 +123,9 @@ def _unpacker(*args):
     return func
 
 def unpacker(type_, func_):
+    """
+    This function is still in potential flux.  Writing new (un)packers is delicate; please see the source.
+    """
     _unpack_handlers[type_] = func_
     _unpack_handlers[typestr(type_)] = func_
 
@@ -158,27 +164,27 @@ def findHandler(cls_or_name, handler_dict):
 
 class CouchableDb(object):
     """
-    >>> cdb=CouchableDb('testing')
-    >>> class SimpleDoc(CouchableDoc):
-    ...     def __init__(self, **kwargs):
-    ...         for name, value in kwargs.items():
-    ...             setattr(self, name, value)
-    ... 
-    >>> a = SimpleDoc(name='AAA')
-    >>> b = SimpleDoc(name='BBB', a=a)
-    >>> c = SimpleDoc(name='CCC', a=a)
-    >>> id_list = cdb.store([b, c])
-    >>> id_list
-    ['...SimpleDoc:...', '...SimpleDoc:...']
-    >>> b, c = cdb.load(id_list)
-    >>> assert b.a is c.a
-    >>> cdb.db[b._id]
-    <Document '...SimpleDoc:...'@'...' {'a': 'couchable:id:...SimpleDoc:...', 'couchable:': {'class': 'SimpleDoc', 'module': '...'}, 'name': 'BBB'}>
+    Currently, though it is not documented here, the .db parameter is part of
+    the public API of CouchableDb; it is required for use with views, etc.
+    Please see the couchdb documentation for details:
+    
+    U{http://packages.python.org/CouchDB/}
     """
     
     _wrapper_cache = weakref.WeakValueDictionary()
     
     def __init__(self, name=None, url=None, db=None):
+        """
+        Creates a CouchableDb wrapper around a couchdb.Database object.  If
+        the database does not yet exist, it will be created.
+        
+        @type  name: str
+        @param name: Name of the CouchDB database to connect to.
+        @type  url: str
+        @param url: The URL of the CouchDB server.  Uses the couchdb default of http://localhost:5984/
+        @type  db: couchdb.Database
+        @param db: An instance of couchdb.Database that has already been instantiated.  Overrides the name and url params.
+        """
         if db is None:
             if url is None:
                 server = couchdb.Server()
@@ -198,6 +204,36 @@ class CouchableDb(object):
         
     
     def store(self, what):
+        """
+        Stores the documents in the C{what} parameter in CouchDB.  If a C{._id}
+        does not yet exist on the object, it will be added.  If the C{._id} is
+        present, it will be used instead.  The C{._rev} of the object(s) must
+        match what is already in the database.
+        
+        Any attachments for the document will also be uploaded.  As of the
+        current revision (0.0.1a5), each attachment will be uploaded each time
+        the document is stored.
+        
+        I{This behavior is expected to change during the course of the 0.x.x series of releases.}
+        
+        Any objects referenced by the object(s) in C{what} will also be stored.
+        If those objects are L{registered as document types<registerDocType>},
+        then they will also be stored as top level objects, even if they exist
+        in the database already, and have not changed.
+        
+        I{This behavior may change during the course of the 0.x.x series of releases.}
+        
+        Any cycles comprised entirely of non-document classes will cause the
+        store call to raise an exception.  Cycles where at least one object in
+        the cycle is to be stored as a top-level document are fine.
+        
+        I{This behavior may change during the course of the 0.x.x series of releases.}
+        
+        @type  what: obj or list
+        @param what: The object or list of objects to store in CouchDB.
+        @rtype: str or list
+        @return: The C{._id} of the C{what} parameter, or the list of such IDs if C{what} was a list.
+        """
         if not isinstance(what, list):
             store_list = [what]
         else:
@@ -651,6 +687,29 @@ class CouchableDb(object):
             raise
 
     def load(self, what, loaded=None):
+        """
+        Loads the indicated object(s) out of CouchDB.
+        
+        Loading an ID multiple times will result in getting the same object
+        returned each time.  Subsequent loads will return the same object
+        again, but with an updated C{__dict__}.  Note that this means it is
+        impossible to have both the current version of the object and an older
+        revision loaded at the same time.
+        
+        I{Behavior of loading old document revisions is untested at this time.}
+        
+        If what is a dict or a couchdb.client.Row, then the values will be used
+        from that object rather than re-fetching from the database.  Likewise,
+        the loaded parameter can be used to prevent multiple DB hits.  This can
+        be useful when loading multiple documents returned by a view, etc.
+
+        @type  what: str, dict, couchdb.client.Row or list of same
+        @param what: A document C{_id}, a dict with an C{'_id'} key, a couchdb.client.Row instance, or a list of any of the preceding.
+        @type  loaded: dict
+        @param loaded: A mapping of document C{_id}s to documents that have already been loaded out of the database.
+        @rtype: obj or list
+        @return: The object indicated by the C{what} parameter, or a list of such objects if C{what} was a list.
+        """
         id_list = []
         loaded_dict = loaded or {}
         
@@ -712,9 +771,18 @@ class CouchableDb(object):
 
 # Docs
 _couchable_types = collections.OrderedDict()
-def registerDocType(type_, preStore_func=lambda x, cdb: None, postLoad_func=lambda x, cdb: None):
+def registerDocType(type_, preStore_func=(lambda obj, cdb: None), postLoad_func=(lambda obj, cdb: None)):
     """
-    Example: registerDocType(CouchableDoc, lambda obj: obj.preStore(), lambda obj: obj.postLoad())
+    @type  type_: type
+    @param type_: Instances of this type will be stored as top-level CouchDB documents.
+    @type  preStore_func: callable
+    @param preStore_func: A callback of the form C{lambda obj, cdb: None}, called just before storing the object.
+    @type  postLoad_func: callable
+    @param postLoad_func: A callback of the form C{lambda obj, cdb: None}, called just after loading the object.
+    @rtype: type
+    @return: The C{type_} parameter.
+    
+    Example: C{registerDocType(CouchableDoc, lambda obj, cdb: obj.preStore(cdb), lambda obj, cdb: obj.postLoad(cdb))}
     """
     _couchable_types[type_] = (preStore_func, postLoad_func)
     _couchable_types[typestr(type_)] = (preStore_func, postLoad_func)
@@ -723,17 +791,75 @@ def registerDocType(type_, preStore_func=lambda x, cdb: None, postLoad_func=lamb
 
 class CouchableDoc(object):
     """
-    Base class for couchable python objects.  Note: Deriving from this class is optional; classes may also use registerDocType(...).
+    Base class for types that should be stored as CouchDB documents.
+    
+    Note: Deriving from this class is optional; classes may also use L{registerDocType}.
+    The only advantage to subclassing this is that L{registerDocType} has already
+    been called for this class.
     """
-    def preStore(self):
+    def preStore(self, cdb):
+        """
+        Basic hook point for adding behavior needed just prior to storage.
+        
+        Defaults to a no-op.
+        
+        @type  cdb: CouchableDb
+        @param cdb: CouchableDb object that this object is about to be stored with.
+        """
         pass
     
-    def postLoad(self):
+    def postLoad(self, cdb):
+        """
+        Basic hook point for adding behavior needed just after to loading.
+        
+        Defaults to a no-op.
+        
+        @type  cdb: CouchableDb
+        @param cdb: CouchableDb object that this object was just loaded from.
+        """
         pass
     
-registerDocType(CouchableDoc, lambda obj, cdb: obj.preStore(), lambda obj, cdb: obj.postLoad())
+registerDocType(CouchableDoc, lambda obj, cdb: obj.preStore(cdb), lambda obj, cdb: obj.postLoad(cdb))
 
 def newid(obj, id_func, noUuid=False, noType=False, sep=':'):
+    """
+    Helper function to make document IDs more readable.
+    
+    By default, CouchableDb document IDs have the following form:
+    
+    C{module.Class:UUID}
+    
+    The intent is that each document ID will be reasonably easy to read and
+    identify at a glance.  However, for some document classes, there is a more
+    appropriate way to label each instance.  For example, a C{Person} class
+    might want to include first and last name as part of the ID, so that casual
+    examination of the document ID makes it clear which person that ID
+    corresponds to.
+    
+    C{newid} has no return data; it I{sets the _id on the object} if one is not already present.
+
+    @type  obj: object
+    @param obj: The object to potentially set an C{_id} on.
+    @type  id_func: callable
+    @param id_func: A callable that takes the object and returns a string to include in the C{_id}.
+    @type  noUuid: bool
+    @param noUuid: A flag that indicates if a UUID should be appended to the ID.
+    @type  noType: bool
+    @param noType: A flag that indicates if type information should be prepended to the ID.
+    @type  sep: string
+    @param sep: The string join the various ID components with.  Defaults to C{':'}.
+    
+    Example::
+        class ClassA(object):
+            def __init__(self, name):
+                self.name = name
+            # ...
+        couchable.registerDocType(ClassA,
+                lambda obj, cdb: couchable.newid(obj, lambda x: x.name),
+                lambda obj, cdb: None)
+                
+        couchable.newid(ClassA('foo')) == 'example.ClassA:foo:4094b428-5b45-44fe-bd27-dcb173ec98e8'
+    """
     if not hasattr(obj, '_id'):
         id_list = []
         
@@ -749,6 +875,14 @@ def newid(obj, id_func, noUuid=False, noType=False, sep=':'):
 
 # Attachments
 def doGzip(data):
+    """
+    Helper function for compressing byte strings.
+
+    @type  data: byte string
+    @param data: The data to compress.
+    @rtype: byte string
+    @return: The compressed byte string.
+    """
     str_io = cStringIO.StringIO()
     gz_file = gzip.GzipFile(mode='wb', fileobj=str_io)
     gz_file.write(data)
@@ -756,38 +890,89 @@ def doGzip(data):
     return str_io.getvalue()
 
 def doGunzip(data):
+    """
+    Helper function for compressing byte strings.
+
+    @type  data: byte string
+    @param data: The data to uncompress.
+    @rtype: byte string
+    @return: The uncompressed byte string.
+    """
     str_io = cStringIO.StringIO(data)
     gz_file = gzip.GzipFile(mode='rb', fileobj=str_io)
     return gz_file.read()
     
 _attachment_handlers = collections.OrderedDict()
-def registerAttachmentType(type_, pack_func, unpack_func, content_type, gzip=False):
+def registerAttachmentType(type_,
+        serialize_func=(lambda obj: pickle.dumps(obj)),
+        deserialize_func=(lambda data: pickle.loads(data)),
+        content_type='application/octet-stream', gzip=False):
     """
-    Example: registerAttachmentType(CouchableAttachment, \
-            lambda obj: CouchableAttachment.pack(obj), \
-            lambda data: CouchableAttachment.unpack(data), \
+    @type  type_: type
+    @param type_: Instances of this type will be stored as attachments instead of CouchDB documents.
+    @type  serialize_func: callable
+    @param serialize_func: A callback of the form C{lambda obj: pickle.dumps(obj)}, called before attaching the object.  The callable needs to accept the object and return a byte string.
+    @type  deserialize_func: callable
+    @param deserialize_func: A callback of the form C{lambda data: pickle.loads(data)}, called after retreiving the attached object.  The callable needs to accept a byte string and return the object.
+    @type  content_type: str
+    @param content_type: The content type of the attached objected (C{'application/octet-stream'}, etc.).
+    @type  gzip: bool
+    @param gzip: Indiates if the byte string should be compressed or not.
+    @rtype: type
+    @return: The C{type_} parameter.
+    
+    Example::
+        registerAttachmentType(CouchableAttachment,
+            lambda obj: CouchableAttachment.pack(obj),
+            lambda data: CouchableAttachment.unpack(data),
             'application/octet-stream')
     """
     if gzip:
-        handler_tuple = (lambda data: doGzip(pack_func(data)), lambda data: unpack_func(doGunzip(data)), content_type)
+        handler_tuple = (lambda data: doGzip(serialize_func(data)), lambda data: deserialize_func(doGunzip(data)), content_type)
     else:
-        handler_tuple = (pack_func, unpack_func, content_type)
+        handler_tuple = (serialize_func, deserialize_func, content_type)
 
     _packer(type_)(CouchableDb._pack_attachment)
     _attachment_handlers[type_] = handler_tuple
     _attachment_handlers[typestr(type_)] = handler_tuple
+    
+    return type_
 
 class CouchableAttachment(object):
     """
-    Base class for attachment python objects.  Note: Deriving from this class is optional; classes may also use registerAttachmentType(...).
+    Base class for types that should be stored as CouchDB attachments.
+    
+    Note: Deriving from this class is optional; classes may also use L{registerAttachmentType}.
+    The only advantage to subclassing this class is that L{registerAttachmentType} has already
+    been called for this class.
     """
     
     @staticmethod
     def pack(obj):
+        """
+        C{@staticmethod} hook point for serializing the attachment class.
+        
+        Defaults to C{pickle.dumps(obj)}.
+        
+        @type  obj: object
+        @param obj: The object to serialize and upload as an attachment.
+        @rtype: byte string
+        @return: The serialized data.
+        """
         return pickle.dumps(obj)
     
     @staticmethod
     def unpack(data):
+        """
+        C{@staticmethod} hook point for deserializing the attachment class.
+        
+        Defaults to C{pickle.dumps(obj)}.
+        
+        @type  data: byte string
+        @param data: The serlized data to unserialize into an object.
+        @rtype: object
+        @return: The unserialized object.
+        """
         return pickle.loads(data)
 
 registerAttachmentType(CouchableAttachment,

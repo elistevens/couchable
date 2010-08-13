@@ -18,6 +18,20 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+"""
+The public API of couchable consists of:
+    - L{CouchableDb}: The core DB wrapper/access object.
+    - L{packer}:, L{unpacker}: Extends the list of built-in or C types supported.
+    - L{registerDocType}:, L{CouchableDoc}: For adding new document classes.
+    - L{registerAttachmentType}:, L{CouchableAttachment}: For adding classes to store as attachments.
+    - L{doGzip}:, L{doGunzip}: Helper functions for compressing attachments.
+    - L{newid}: Helper function to make document IDs readable.
+    
+The source for couchable lives at:
+    - U{http://github.com/wickedgrey/couchable}
+
+--README.txt--
+"""
 
 from core import CouchableDb
 from core import registerDocType, CouchableDoc
