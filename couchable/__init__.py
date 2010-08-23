@@ -30,7 +30,7 @@ The public API of couchable consists of:
 The source for couchable lives at:
     - U{http://github.com/wickedgrey/couchable}
     
-For the time being, please use the github issue tracker for bugs:
+Please use the github issue tracker for bugs:
     - U{http://github.com/wickedgrey/couchable/issues}
 
 --README.txt--

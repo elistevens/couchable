@@ -262,12 +262,12 @@ class TestCouchable(unittest.TestCase):
         b_id = self.cdb.store(b)
         
     
-    @unittest.skip("""still implementing tests for this...""")
+    @unittest.skip("""still implementing tests for this feature...""")
     @dumpcdb
     def test_aftermarket(self):
         pass
         
-    @unittest.skip("""still implementing tests for this...""")
+    @unittest.skip("""still implementing tests for this feature...""")
     @dumpcdb
     def test_loadFromView(self):
         pass
