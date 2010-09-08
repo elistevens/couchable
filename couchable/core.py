@@ -442,7 +442,7 @@ class CouchableDb(object):
         else:
             return data
 
-    @_packer(int, long, float)
+    @_packer(int, long, float, type(None))
     def _pack_native_keyAsRepr(self, parent_doc, data, attachment_list, name, isKey):
         """
         >>> cdb=CouchableDb('testing')
@@ -619,6 +619,8 @@ class CouchableDb(object):
                     elif method_str == 'repr':
                         if type_str in __builtins__:
                             return __builtins__.get(type_str)(data)
+                        elif type_str == '__builtin__.NoneType':
+                            return None
                         else:
                             return importstr(*type_str.rsplit('.', 1))(data)
     
@@ -662,14 +664,17 @@ class CouchableDb(object):
                         if inst is None:
                             inst = cls.__new__(cls)
                             # This is important, see test_docCycles
-                            self._obj_by_id[doc['_id']] = inst
+                            print doc
+                            if '_id' in doc:
+                                self._obj_by_id[doc['_id']] = inst
                         
                         #print "unpack isinstance(doc, dict) doc:", doc.get('_id', 'still no id')
                         #print "unpack isinstance(doc, dict) doc:", doc.get('_rev', 'still no rev')
                         
                         inst.__dict__.update(info.get('private', {}))
-                        inst.__dict__['_id'] = doc['_id']
-                        inst.__dict__['_rev'] = doc['_rev']
+                        if '_id' in doc:
+                            inst.__dict__['_id'] = doc['_id']
+                            inst.__dict__['_rev'] = doc['_rev']
                         
                         # If we haven't stuffed the cache AND pre-set the id/rev, then this goes into an infinite loop.  See test_docCycles
                         inst.__dict__.update({self._unpack(parent_doc, k, loaded_dict): self._unpack(parent_doc, v, loaded_dict) for k,v in doc.items() if k != FIELD_NAME})

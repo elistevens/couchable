@@ -137,7 +137,7 @@ class TestCouchable(unittest.TestCase):
 
     @dumpcdb
     def test_nonStrKeys(self):
-        d = {1234:'ints', (1,2,3,4):'tuples', frozenset([1,1,2,2,3,3]): 'frozenset'}
+        d = {1234:'ints', (1,2,3,4):'tuples', frozenset([1,1,2,2,3,3]): 'frozenset', None: 'none'}
         
         obj = Simple(d=d)
         
@@ -170,7 +170,7 @@ class TestCouchable(unittest.TestCase):
 
     @dumpcdb
     def test_multidoc(self):
-        a = SimpleDoc(name='AAA')
+        a = SimpleDoc(name='AAA', s=Simple(sss='SSS'))
         b = SimpleDoc(name='BBB', a=a)
         c = SimpleDoc(name='CCC', a=a)
         

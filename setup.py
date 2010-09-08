@@ -30,7 +30,7 @@ setup(
     description='Allows arbitrary python objects to be stored in CouchDB, while keeping the resulting CouchDB document as "natural" as possible.',
     packages=['couchable',],
     install_requires=[
-            'CouchDb >= 0.7',
+            'CouchDb >= 0.8',
         ],
     classifiers=[
             'Development Status :: 2 - Pre-Alpha',
