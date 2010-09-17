@@ -21,9 +21,11 @@
 
 # stdlib
 import copy
+import datetime
 import doctest
 import gc
 import random
+import re
 import sys
 import time
 import unittest
@@ -192,8 +194,12 @@ class TestCouchable(unittest.TestCase):
     @dumpcdb
     def test_attachments(self):
         b = SimpleDoc(name='BBB', attach=SimpleAttachment(b=1, bb=2))
-        a = SimpleDoc(name='AAA', attach=SimpleAttachment(a=1, aa=2), bb=b)
         c = SimpleDoc(name='CCC', attach=SimpleAttachment(c=1, cc=2), bb=b)
+        a = SimpleDoc(name='AAA', attach=SimpleAttachment(a=1, aa=2), bb=b,
+                dt=datetime.datetime.now(),
+                td=datetime.timedelta(seconds=0.5),
+                regex=re.compile('[a-z]+'),
+            )
 
         _id = self.cdb.store(c)
         _id = self.cdb.store(a)
@@ -220,6 +226,14 @@ class TestCouchable(unittest.TestCase):
 
         self.assertNotIn('_attachments', self.cdb.db[_id]['couchable:'].get('private', {}))
         #assert False
+
+        self.assertLess(a.dt, datetime.datetime.now())
+        self.assertGreater(a.dt + a.td, datetime.datetime.now())
+        time.sleep(1)
+        self.assertLess(a.dt + a.td, datetime.datetime.now())
+
+        self.assertTrue(a.regex.match('abcd'))
+        self.assertEqual(a.regex.match('1234'), None)
 
     @dumpcdb
     def test_docCycles(self):

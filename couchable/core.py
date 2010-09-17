@@ -416,6 +416,8 @@ class CouchableDb(object):
                 parent_doc[FIELD_NAME]['keys'][key_str] = self._pack_object(parent_doc, data, attachment_list, name, False)
 
                 return key_str
+            elif not hasattr(data, '__dict__'):
+                return self._pack_attachment(parent_doc, data, attachment_list, name, isKey)
             else:
                 # This code matches the code in _store
                 doc = {}
@@ -611,9 +613,13 @@ class CouchableDb(object):
 
         base_cls, handler_tuple = findHandler(cls, _attachment_handlers)
 
-        content = handler_tuple[0](data)
+        if base_cls is None:
+            content = pickle.dumps(data)
+            attachment_list.append((content, name, 'application/octet-stream'))
+        else:
+            content = handler_tuple[0](data)
+            attachment_list.append((content, name, handler_tuple[2]))
 
-        attachment_list.append((content, name, handler_tuple[2]))
         return '{}{}:{}:{}'.format(FIELD_NAME, 'attachment', typestr(base_cls), name)
 
     def _unpack(self, parent_doc, doc, loaded_dict, inst=None):
@@ -644,15 +650,13 @@ class CouchableDb(object):
                         return self._unpack(parent_doc, parent_doc[FIELD_NAME]['keys'][doc], loaded_dict)
 
                     elif method_str == 'attachment':
-                        base_cls, handler_tuple = findHandler(type_str, _attachment_handlers)
-
-                        if base_cls is None:
-                            # FIXME: error?
-                            print type_str, data, _attachment_handlers
-
-                        #print datetime.datetime.now(), "599: self.db.get_attachment"
-                        attachment_response = self.db.get_attachment(parent_doc, data)
-                        return handler_tuple[1](attachment_response.read())
+                        if type_str == '__builtin__.NoneType':
+                            attachment_response = self.db.get_attachment(parent_doc, data)
+                            return pickle.loads(attachment_response.read())
+                        else:
+                            base_cls, handler_tuple = findHandler(type_str, _attachment_handlers)
+                            attachment_response = self.db.get_attachment(parent_doc, data)
+                            return handler_tuple[1](attachment_response.read())
                     else:
                         # FIXME: error?
                         pass
