@@ -207,6 +207,13 @@ class CouchableDb(object):
         #
         #self._wrapper_cache[(self.url, self.name)] = self
 
+    def __deepcopy__(self, memo):
+        return copy.copy(self)
+
+    #    cls = type(self)
+    #    inst = cls.__new__(cls)
+    #    inst.__dict__.update({copy.deepcopy(k): copy.deepcopy(v) for k,v in self.__dict__.items if k not in ['_cdb']})
+
 
     def store(self, what):
         """
