@@ -173,6 +173,7 @@ class TestCouchable(unittest.TestCase):
         self.assertTrue(hasattr(a, '_implementationDetail'))
         self.assertTrue(hasattr(a.b, '_morePrivate'))
 
+        a_id = self.cdb.store(a)
 
     @dumpcdb
     def test_multidoc(self):

@@ -171,9 +171,9 @@ class CouchableDb(object):
     U{http://packages.python.org/CouchDB/}
     """
 
-    _wrapper_cache = weakref.WeakValueDictionary()
+    _obj_by_id_cache = weakref.WeakValueDictionary()
 
-    def __init__(self, name=None, url=None, db=None):
+    def __init__(self, name=None, url='http://localhost:5984/', db=None):
         """
         Creates a CouchableDb wrapper around a couchdb.Database object.  If
         the database does not yet exist, it will be created.
@@ -185,22 +185,27 @@ class CouchableDb(object):
         @type  db: couchdb.Database
         @param db: An instance of couchdb.Database that has already been instantiated.  Overrides the name and url params.
         """
+
+        # This dance is odd due to the semantics of how WVD works.
+        cache_key = (url, name)
+        self._obj_by_id = self._obj_by_id_cache.get(cache_key, weakref.WeakValueDictionary())
+        self._obj_by_id_cache[(url, name)] = self._obj_by_id
+
+        self.name = name
+        self.url = url
+
         if db is None:
-            if url is None:
-                server = couchdb.Server()
-            else:
-                server = couchdb.Server(url)
+            self.server = couchdb.Server(self.url)
 
             try:
-                db = server[name]
+                db = self.server[self.name]
             except:
-                db = server.create(name)
+                db = self.server.create(self.name)
 
-        assert db not in self._wrapper_cache
-
-        self._wrapper_cache[db] = self
         self.db = db
-        self._obj_by_id = weakref.WeakValueDictionary()
+        #assert (self.url, self.name) not in self._wrapper_cache
+        #
+        #self._wrapper_cache[(self.url, self.name)] = self
 
 
     def store(self, what):
@@ -305,6 +310,8 @@ class CouchableDb(object):
             #self._pack(doc, obj, attachment_list)
 
             self._done_dict[obj._id] = (obj, doc, attachment_list)
+
+            obj._cdb = self
 
 
     def _pack(self, parent_doc, data, attachment_list, name, isKey=False):
@@ -587,13 +594,15 @@ class CouchableDb(object):
                 'module': '__builtin__'}}}}}
         """
         if isObjDict:
-            private_keys = {k for k in data.keys() if k.startswith('_') and k not in ('_id', '_rev', '_attachments')}
+            private_keys = {k for k in data.keys() if k.startswith('_') and k not in ('_id', '_rev', '_attachments', '_cdb')}
         else:
             private_keys = set()
 
         doc = {self._pack(parent_doc, k, attachment_list, '{}>{}'.format(name, str(k)), True):
             self._pack(parent_doc, v, attachment_list, '{}.{}'.format(name, str(k)), False)
-            for k,v in data.items() if k not in private_keys and k != '_attachments'}
+            for k,v in data.items() if k not in private_keys and k not in ['_attachments', '_cdb']}
+
+        #assert '_attachments' not in doc, ', '.join([str(data), str(isObjDict)])
 
         if private_keys:
             doc.setdefault(FIELD_NAME, {})
@@ -790,6 +799,8 @@ class CouchableDb(object):
         base_cls, func_tuple = findHandler(type(obj), _couchable_types)
         if func_tuple:
             func_tuple[1](obj, self)
+
+        obj._cdb = self
 
         return obj
 
