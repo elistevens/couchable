@@ -44,6 +44,7 @@ import weakref
 #import yaml
 import couchdb
 import couchdb.client
+import couchdb.design
 #import couchdb.mapping
 
 """
@@ -203,9 +204,22 @@ class CouchableDb(object):
                 db = self.server.create(self.name)
 
         self.db = db
-        #assert (self.url, self.name) not in self._wrapper_cache
-        #
-        #self._wrapper_cache[(self.url, self.name)] = self
+
+        self._init_views()
+
+    def _init_views(self):
+        byclass_js = '''
+            function(doc) {
+                if ('couchable:' in doc) {
+                    var info = doc['couchable:'];
+                    emit([info.module, info.class, doc._id], doc);
+                }
+            }'''
+
+        couchdb.design.ViewDefinition('couchable', 'byclass', byclass_js).sync(self.db)
+
+    def loadInstances(self, cls):
+        return self.load(self.db.view('couchable/byclass', include_docs=True, startkey=[cls.__module__, cls.__name__], endkey=[cls.__module__, cls.__name__, {}]).rows)
 
     def __deepcopy__(self, memo):
         return copy.copy(self)
