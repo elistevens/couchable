@@ -714,7 +714,7 @@ class CouchableDb(object):
                         if inst is None:
                             inst = cls.__new__(cls)
                             # This is important, see test_docCycles
-                            print doc
+                            #print doc
                             if '_id' in doc:
                                 self._obj_by_id[doc['_id']] = inst
 
