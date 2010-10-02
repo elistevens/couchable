@@ -30,10 +30,13 @@ import cPickle as pickle
 import cStringIO
 import datetime
 import gzip
+import hashlib
+import inspect
 import itertools
 import os
 import pprint
 import re
+import string
 import subprocess
 import sys
 import tempfile
@@ -75,6 +78,12 @@ e=couchable.load(i, cdb)
 """
 
 def importstr(module_str, from_=None):
+    """
+    >>> importstr('os')
+    <module 'os' from '.../os.pyc'>
+    >>> importstr('math', 'fabs')
+    <built-in function fabs>
+    """
     module = __import__(module_str)
     for sub_str in module_str.split('.')[1:]:
         module = getattr(module, sub_str)
@@ -115,20 +124,20 @@ def packer(type_, func_):
     _pack_handlers[type_] = func_
     _pack_handlers[typestr(type_)] = func_
 
-_unpack_handlers = collections.OrderedDict()
-def _unpacker(*args):
-    def func(func_):
-        for type_ in args:
-            unpacker(type_, func_)
-        return func_
-    return func
-
-def unpacker(type_, func_):
-    """
-    This function is still in potential flux.  Writing new (un)packers is delicate; please see the source.
-    """
-    _unpack_handlers[type_] = func_
-    _unpack_handlers[typestr(type_)] = func_
+#_unpack_handlers = collections.OrderedDict()
+#def _unpacker(*args):
+#    def func(func_):
+#        for type_ in args:
+#            unpacker(type_, func_)
+#        return func_
+#    return func
+#
+#def unpacker(type_, func_):
+#    """
+#    This function is still in potential flux.  Writing new (un)packers is delicate; please see the source.
+#    """
+#    _unpack_handlers[type_] = func_
+#    _unpack_handlers[typestr(type_)] = func_
 
 
 
@@ -218,8 +227,27 @@ class CouchableDb(object):
 
         couchdb.design.ViewDefinition('couchable', 'byclass', byclass_js).sync(self.db)
 
-    def loadInstances(self, cls):
-        return self.load(self.db.view('couchable/byclass', include_docs=True, startkey=[cls.__module__, cls.__name__], endkey=[cls.__module__, cls.__name__, {}]).rows)
+    def addClassView(self, cls, name, keys=None, multikeys=None):
+        multikeys = multikeys or [keys]
+        emit_js = '\n'.join(['''emit([{}], doc);'''.format(', '.join(keys)) for keys in multikeys])
+
+        byclass_js = '''
+            function(doc) {
+                if ('couchable:' in doc) {
+                    var info = doc['couchable:'];
+                    if (info.module == '$module' && info.class == '$cls') {
+                        $emit
+                    }
+                }
+            }'''
+
+        byclass_js = string.Template(byclass_js).safe_substitute(module=cls.__module__, name=cls.__name__, emit=emit_js)
+
+        couchdb.design.ViewDefinition('couchable', 'byclass:{}.{}.{}'.format(cls.__module__, cls.__name__, name), byclass_js).sync(self.db)
+
+    #@deprecated
+    #def loadInstances(self, cls):
+    #    return self.load(self.db.view('couchable/byclass', include_docs=True, startkey=[cls.__module__, cls.__name__], endkey=[cls.__module__, cls.__name__, {}]).rows)
 
     def __deepcopy__(self, memo):
         return copy.copy(self)
@@ -271,13 +299,13 @@ class CouchableDb(object):
             self._store(obj)
 
         # Actually (finally) send the data to couchdb.
-        try:
+        #try:
             #pprint.pprint([(x[0]._id, getattr(x[0], '_rev', None)) for x in self._done_dict.values()])
             #print datetime.datetime.now(), "214: self.db.update"
-            ret_list = self.db.update([x[1] for x in self._done_dict.values()])
-        except:
-            #print self._done_dict.values()
-            raise
+        ret_list = self.db.update([x[1] for x in self._done_dict.values()])
+        #except:
+        #    print self._done_dict.values()
+        #    raise
 
         for ret, store_tuple in itertools.izip(ret_list, self._done_dict.values()):
             success, _id, _rev = ret
@@ -340,14 +368,15 @@ class CouchableDb(object):
 
         base_cls, handler = findHandler(cls, _pack_handlers)
 
-        if handler:
-            try:
-                return handler(self, parent_doc, data, attachment_list, name, isKey)
-            except RuntimeError:
-                print "Error with", cls, data
-                raise
-        else:
-            raise UncouchableException("No _packer for type", cls, data)
+        return handler(self, parent_doc, data, attachment_list, name, isKey)
+        #if handler:
+        #    try:
+        #        return handler(self, parent_doc, data, attachment_list, name, isKey)
+        #    except RuntimeError:
+        #        print "Error with", cls, data
+        #        raise
+        #else:
+        #    raise UncouchableException("No _packer for type", cls, data)
 
         #if cls in _pack_handlers:
         #    return _pack_handlers[cls](self, parent_doc, data, attachment_list, name, isKey)
@@ -372,6 +401,12 @@ class CouchableDb(object):
 
         if hasattr(cls, '__module__'):
             doc[FIELD_NAME]['module'] = str(cls.__module__)
+
+        try:
+            doc[FIELD_NAME]['src_md5'] = hashlib.md5(inspect.getsource(cls)).hexdigest()
+        except (IOError, TypeError):
+            pass
+
         return doc
 
     def _objInfo_consargs(self, data, doc, args=None, kwargs=None):
@@ -453,6 +488,26 @@ class CouchableDb(object):
                 doc = self._objInfo_doc(data, doc)
 
                 return doc
+
+    @_packer(type(os))
+    def _pack_module(self, parent_doc, data, attachment_list, name, isKey):
+        """
+        >> import os.path
+        >>> cdb=CouchableDb('testing')
+        >>> parent_doc = {}
+        >>> attachment_list = []
+
+        >>> data = os.path
+        >>> cdb._pack_module(parent_doc, data, attachment_list, 'myname', False)
+        'couchable:module:os.path'
+        >>> cdb._pack_module(parent_doc, data, attachment_list, 'myname', True)
+        'couchable:module:os.path'
+        """
+
+        for name, module in sys.modules.items():
+            if module == data:
+                return '{}{}:{}'.format(FIELD_NAME, 'module', name)
+
 
     @_packer(str, unicode)
     def _pack_native(self, parent_doc, data, attachment_list, name, isKey):
@@ -646,20 +701,23 @@ class CouchableDb(object):
         if base_cls is None:
             content = pickle.dumps(data)
             attachment_list.append((content, name, 'application/octet-stream'))
+            return '{}{}:{}:{}'.format(FIELD_NAME, 'attachment', 'pickle', name)
         else:
             content = handler_tuple[0](data)
             attachment_list.append((content, name, handler_tuple[2]))
-
-        return '{}{}:{}:{}'.format(FIELD_NAME, 'attachment', typestr(base_cls), name)
+            return '{}{}:{}:{}'.format(FIELD_NAME, 'attachment', typestr(base_cls), name)
 
     def _unpack(self, parent_doc, doc, loaded_dict, inst=None):
-        try:
+        #try:
             if isinstance(doc, (str, unicode)):
                 if doc.startswith(FIELD_NAME):
                     _, method_str, data = doc.split(':', 2)
 
                     if method_str == 'id':
                         return self._load(data, loaded_dict)
+
+                    elif method_str == 'module':
+                        return importstr(data)
 
                     type_str, data = data.split(':', 1)
                     if method_str == 'append':
@@ -680,7 +738,7 @@ class CouchableDb(object):
                         return self._unpack(parent_doc, parent_doc[FIELD_NAME]['keys'][doc], loaded_dict)
 
                     elif method_str == 'attachment':
-                        if type_str == '__builtin__.NoneType':
+                        if type_str == 'pickle':
                             attachment_response = self.db.get_attachment(parent_doc, data)
                             return pickle.loads(attachment_response.read())
                         else:
@@ -737,9 +795,9 @@ class CouchableDb(object):
 
                 else:
                     return {self._unpack(parent_doc, k, loaded_dict): self._unpack(parent_doc, v, loaded_dict) for k,v in doc.items()}
-        except:
-            print "Error with:", doc
-            raise
+        #except:
+        #    print "Error with:", doc
+        #    raise
 
     def load(self, what, loaded=None):
         """
@@ -760,13 +818,17 @@ class CouchableDb(object):
 
         @type  what: str, dict, couchdb.client.Row or list of same
         @param what: A document C{_id}, a dict with an C{'_id'} key, a couchdb.client.Row instance, or a list of any of the preceding.
-        @type  loaded: dict
+        @type  loaded: dict, couchdb.client.Row or list of same
         @param loaded: A mapping of document C{_id}s to documents that have already been loaded out of the database.
         @rtype: obj or list
         @return: The object indicated by the C{what} parameter, or a list of such objects if C{what} was a list.
         """
         id_list = []
-        loaded_dict = loaded or {}
+
+        if isinstance(loaded, list):
+            loaded_dict = {x['_id']: x for x in loaded_list}
+        else:
+            loaded_dict = loaded or {}
 
         #if not isinstance(what, (list, couchdb.client.ViewResults)):
         if not isinstance(what, list):

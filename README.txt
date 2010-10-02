@@ -1,11 +1,13 @@
 Currently requires:
 - Python 2.7
-- CouchDB 0.11+ (untested on lower)
-- http://pypi.python.org/pypi/CouchDB 0.7+ (untested on lower)
+- CouchDB 1.0.1+ (untested on lower, 0.11 will probably work)
+- http://pypi.python.org/pypi/CouchDB 0.8+ (untested on lower, 0.7 will probably work)
 
-API docs at:
 
-http://packages.python.org/couchable/
+Source:   http://github.com/wickedgrey/couchable
+Package:  http://pypi.python.org/pypi/couchable
+API docs: http://packages.python.org/couchable
+Blog:     http://blog.nopinch.net/tag/couchable/
 
 
 Example of Use
