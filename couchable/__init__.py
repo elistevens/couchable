@@ -21,17 +21,22 @@
 """
 The public API of couchable consists of:
     - L{CouchableDb}: The core DB wrapper/access object.
-    - L{packer}:, L{unpacker}: Extends the list of built-in or C types supported.
-    - L{registerDocType}:, L{CouchableDoc}: For adding new document classes.
-    - L{registerAttachmentType}:, L{CouchableAttachment}: For adding classes to store as attachments.
-    - L{doGzip}:, L{doGunzip}: Helper functions for compressing attachments.
+    - L{packer}: Extends the list of built-in or C types supported.
+    - L{registerDocType}, L{CouchableDoc}: For adding new document classes.
+    - L{registerAttachmentType}, L{CouchableAttachment}: For adding classes to store as attachments.
+    - L{doGzip}, L{doGunzip}: Helper functions for compressing attachments.
     - L{newid}: Helper function to make document IDs readable.
 
-The source for couchable lives at:
-    - U{http://github.com/wickedgrey/couchable}
+For more information, please see:
+    - API docs: U{http://packages.python.org/couchable}
+    - Blog:     U{http://blog.nopinch.net/tag/couchable}
+    - Package:  U{http://pypi.python.org/pypi/couchable}
+    - Source:   U{http://github.com/wickedgrey/couchable}
 
 Please use the github issue tracker for bugs:
     - U{http://github.com/wickedgrey/couchable/issues}
+
+From the README.txt:
 
 --README.txt--
 """
