@@ -226,6 +226,59 @@ class TestCouchable(unittest.TestCase):
 
         self.assertIs(b.a, c.a)
 
+    def test_viewLoading3(self):
+        a = SimpleDoc(name='AAA', s=Simple(sss='SSS'))
+        b = SimpleDoc(name='BBB', a=a)
+        c = SimpleDoc(name='CCC', a=a)
+
+        id_list = self.cdb.store([b, c])
+
+        del a
+        del b
+        del c
+        self.assertFalse(self.cdb._obj_by_id)
+
+        fullName = self.cdb.addClassView(SimpleDoc, 'name', ['name'])
+
+        #self.cdb.db.view()
+
+        x = self.cdb.load(self.cdb.db.view('couchable/' + fullName, include_docs=True, startkey=['AAA'], endkey=['BBB', {}]).rows)
+
+        print x
+
+        a, b = x
+
+        self.assertEqual(a.name, 'AAA')
+        self.assertEqual(b.name, 'BBB')
+        self.assertEqual(a.s.sss, 'SSS')
+        self.assertIs(a, b.a)
+
+    def test_viewLoading2(self):
+        a = SimpleDoc(name='AAA', s=Simple(sss='SSS'))
+        b = SimpleDoc(name='BBB', a=a)
+        c = SimpleDoc(name='CCC', a=a)
+
+        id_list = self.cdb.store([b, c])
+
+        del a
+        del b
+        del c
+        self.assertFalse(self.cdb._obj_by_id)
+
+        fullName = self.cdb.addClassView(SimpleDoc, 'name', ['name'])
+
+        x = self.cdb.load(id_list, self.cdb.db.view('couchable/' + fullName, include_docs=True, startkey=['BBB'], endkey=['CCC', {}]).rows)
+
+        print x
+
+        b, c = x
+
+        self.assertEqual(b.a.name, 'AAA')
+        self.assertEqual(b.name, 'BBB')
+        self.assertEqual(b.a.s.sss, 'SSS')
+        self.assertIs(b.a, c.a)
+
+
 
     def test_simpleAttachments(self):
         b = SimpleDoc(name='BBB', attach=SimpleAttachment(b=1, bb=2))

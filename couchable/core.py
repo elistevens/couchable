@@ -227,9 +227,9 @@ class CouchableDb(object):
 
         couchdb.design.ViewDefinition('couchable', 'byclass', byclass_js).sync(self.db)
 
-    def addClassView(self, cls, name, keys=None, multikeys=None):
+    def addClassView(self, cls, name, keys=None, multikeys=None, value=1, reduce=None):
         multikeys = multikeys or [keys]
-        emit_js = '\n'.join(['''emit([{}], doc);'''.format(', '.join(keys)) for keys in multikeys])
+        emit_js = '\n'.join(['''emit([{}], {});'''.format(', '.join([('info.private.' + key if key[0] == '_' else 'doc.' + key) for key in keys]), value) for keys in multikeys])
 
         byclass_js = '''
             function(doc) {
@@ -241,9 +241,12 @@ class CouchableDb(object):
                 }
             }'''
 
-        byclass_js = string.Template(byclass_js).safe_substitute(module=cls.__module__, name=cls.__name__, emit=emit_js)
+        byclass_js = string.Template(byclass_js).safe_substitute(module=cls.__module__, cls=cls.__name__, emit=emit_js, value=value)
 
-        couchdb.design.ViewDefinition('couchable', 'byclass:{}.{}.{}'.format(cls.__module__, cls.__name__, name), byclass_js).sync(self.db)
+        fullName = 'byclass:{}.{}:{}'.format(cls.__module__, cls.__name__, name)
+        couchdb.design.ViewDefinition('couchable', fullName, byclass_js, reduce).sync(self.db)
+
+        return fullName
 
     #@deprecated
     #def loadInstances(self, cls):
@@ -731,8 +734,8 @@ class CouchableDb(object):
                             return __builtins__.get(type_str)(data)
                         elif type_str == '__builtin__.NoneType':
                             return None
-                        else:
-                            return importstr(*type_str.rsplit('.', 1))(data)
+                        #else:
+                        #    return importstr(*type_str.rsplit('.', 1))(data)
 
                     elif method_str == 'key':
                         return self._unpack(parent_doc, parent_doc[FIELD_NAME]['keys'][doc], loaded_dict)
@@ -826,7 +829,7 @@ class CouchableDb(object):
         id_list = []
 
         if isinstance(loaded, list):
-            loaded_dict = {x['_id']: x for x in loaded_list}
+            loaded_dict = {(x.id if isinstance(x, couchdb.client.Row) else x['_id']): (x.doc if isinstance(x, couchdb.client.Row) else x) for x in loaded}
         else:
             loaded_dict = loaded or {}
 
@@ -849,7 +852,7 @@ class CouchableDb(object):
             elif isinstance(item, dict):
                 id_list.append(item['_id'])
 
-                if len(item) > 1:
+                if len(item) > 2:
                     loaded_dict[item['_id']] = item
 
         if not isinstance(what, list):
