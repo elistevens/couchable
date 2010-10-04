@@ -179,6 +179,10 @@ class CouchableDb(object):
     Please see the couchdb documentation for details:
 
     U{http://packages.python.org/CouchDB/}
+
+    It is possible that in the future couchdbkit could also be used:
+
+    U{http://couchdbkit.org/}
     """
 
     _obj_by_id_cache = weakref.WeakValueDictionary()
@@ -227,7 +231,41 @@ class CouchableDb(object):
 
         couchdb.design.ViewDefinition('couchable', 'byclass', byclass_js).sync(self.db)
 
-    def addClassView(self, cls, name, keys=None, multikeys=None, value=1, reduce=None):
+    def addClassView(self, cls, name, keys=None, multikeys=None, value='1', reduce=None):
+        """
+        Creates a view that only emits records for documents of the specified
+        class.  Each record also emits keys based on the parameters given, which
+        can be used for things like "get all Foo instances with bar between 3
+        and 7."
+
+        The view code resembles the following::
+
+            function(doc) {
+                if ('couchable:' in doc) {
+                    var info = doc['couchable:'];
+                    if (info.module == '$module' && info.class == '$cls') {
+                        $emit
+                    }
+                }
+            }
+
+        I{This behavior may change during the course of the 0.x.x series of releases.}
+
+        @type  cls: type
+        @param cls: The class of objects that the view should be restricted to.  Note that sub/superclasses are not considered.
+        @type  name: string
+        @param name: The string to suffix the name of the view with (byclass:module.class:name).
+        @type  keys: list of strings
+        @param keys: A list of unescaped javascript expressions to use as the key for the view.
+        @type  multikeys: list of list of strings
+        @param multikeys: A list of keys (see above).  Each key will get a separate emit.
+        @type  value: string
+        @param value: A string of unescaped javascript used as the value of each emit.
+        @type  reduce: string
+        @param reduce: A CouchDB reduce function.  Can be None, javascript, or the built-in '_sum' kind of reduce function.
+        @rtype: str
+        @return: The full name of the view (byclass:module.class:name).
+        """
         multikeys = multikeys or [keys]
         emit_js = '\n'.join(['''emit([{}], {});'''.format(', '.join([('info.private.' + key if key[0] == '_' else 'doc.' + key) for key in keys]), value) for keys in multikeys])
 
@@ -268,7 +306,7 @@ class CouchableDb(object):
         match what is already in the database.
 
         Any attachments for the document will also be uploaded.  As of the
-        current revision (0.0.1a5), each attachment will be uploaded each time
+        current revision (0.0.1b2), each attachment will be uploaded each time
         the document is stored.
 
         I{This behavior is expected to change during the course of the 0.x.x series of releases.}
@@ -818,6 +856,10 @@ class CouchableDb(object):
         from that object rather than re-fetching from the database.  Likewise,
         the loaded parameter can be used to prevent multiple DB hits.  This can
         be useful when loading multiple documents returned by a view, etc.
+
+        Example use::
+
+            cdb.load(cdb.db.view('couchable/' + viewName, include_docs=True, startkey=[...], endkey=[..., {}]).rows)
 
         @type  what: str, dict, couchdb.client.Row or list of same
         @param what: A document C{_id}, a dict with an C{'_id'} key, a couchdb.client.Row instance, or a list of any of the preceding.
