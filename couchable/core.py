@@ -167,7 +167,7 @@ def findHandler(cls_or_name, handler_dict):
         return cls_or_name, handler_dict[cls_or_name]
     else:
         for type_, handler in reversed(handler_dict.items()):
-            if isinstance(type_, type) and issubclass(cls_or_name, type_):
+            if isinstance(type_, type) and isinstance(cls_or_name, type) and issubclass(cls_or_name, type_):
                 return type_, handler
 
     return None, None
@@ -287,8 +287,8 @@ class CouchableDb(object):
         return fullName
 
     #@deprecated
-    #def loadInstances(self, cls):
-    #    return self.load(self.db.view('couchable/byclass', include_docs=True, startkey=[cls.__module__, cls.__name__], endkey=[cls.__module__, cls.__name__, {}]).rows)
+    def loadInstances(self, cls):
+        return self.load(self.db.view('couchable/byclass', include_docs=True, startkey=[cls.__module__, cls.__name__], endkey=[cls.__module__, cls.__name__, {}]).rows)
 
     def __deepcopy__(self, memo):
         return copy.copy(self)
@@ -749,7 +749,7 @@ class CouchableDb(object):
             return '{}{}:{}:{}'.format(FIELD_NAME, 'attachment', typestr(base_cls), name)
 
     def _unpack(self, parent_doc, doc, loaded_dict, inst=None):
-        #try:
+        try:
             if isinstance(doc, (str, unicode)):
                 if doc.startswith(FIELD_NAME):
                     _, method_str, data = doc.split(':', 2)
@@ -780,6 +780,9 @@ class CouchableDb(object):
 
                     elif method_str == 'attachment':
                         if type_str == 'pickle':
+                            attachment_response = self.db.get_attachment(parent_doc, data)
+                            return pickle.loads(attachment_response.read())
+                        if type_str == '__builtin__.NoneType':
                             attachment_response = self.db.get_attachment(parent_doc, data)
                             return pickle.loads(attachment_response.read())
                         else:
@@ -836,9 +839,9 @@ class CouchableDb(object):
 
                 else:
                     return {self._unpack(parent_doc, k, loaded_dict): self._unpack(parent_doc, v, loaded_dict) for k,v in doc.items()}
-        #except:
-        #    print "Error with:", doc
-        #    raise
+        except:
+            print "Error with:", doc
+            raise
 
     def load(self, what, loaded=None):
         """
