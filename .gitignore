@@ -1,6 +1,7 @@
 *.pyc
 *.pyo
-*.so
+*_.so
+*_.c
 build
 dist
 *.egg-info

@@ -679,6 +679,11 @@ class CouchableDb(object):
         {}
         """
         assert not isKey
+        if type(data) is not list:
+            #assert not isObjDict
+
+            return self._objInfo_consargs(data, {}, [self._pack_list_noKey(parent_doc, list(data), attachment_list, name, False)])
+
         return [self._pack(parent_doc, x, attachment_list, '{}[{}]'.format(name, i), False) for i, x in enumerate(data)]
 
     @_packer(dict)
@@ -710,6 +715,12 @@ class CouchableDb(object):
                 'kwargs': {},
                 'module': '__builtin__'}}}}}
         """
+        if type(data) is not dict:
+            assert not isObjDict
+
+            return self._objInfo_consargs(data, {}, [], self._pack_dict_keyMeansObject(parent_doc, dict(data.items()), attachment_list, name, False))
+
+
         if isObjDict:
             private_keys = {k for k in data.keys() if k.startswith('_') and k not in ('_id', '_rev', '_attachments', '_cdb')}
         else:

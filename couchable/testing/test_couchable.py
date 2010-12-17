@@ -94,6 +94,12 @@ couchable.registerAttachmentType(AftermarketAttachment,
         deserialize_func=(lambda data: pickle.loads(data)),
         content_type='application/octet-stream', gzip=True)
 
+class DictSubclass(dict):
+    pass
+
+class ListSubclass(list):
+    pass
+
 
 class TestCouchable(unittest.TestCase):
     def setUp(self):
@@ -129,6 +135,20 @@ class TestCouchable(unittest.TestCase):
         self.assertEqual(doctest.testmod(couchable.core,
                 optionflags=(doctest.REPORT_CDIFF | doctest.NORMALIZE_WHITESPACE | doctest.ELLIPSIS))[0], 0)
 
+    def test_2_baseTypeSubclasses(self):
+        obj = Simple(d=DictSubclass(a=1, b=2), l=ListSubclass([1,2,3]))
+
+        _id = self.cdb.store(obj)
+
+        del obj
+        self.assertFalse(self.cdb._obj_by_id)
+
+        obj = self.cdb.load(_id)
+
+        self.assertEqual(type(obj.d), DictSubclass)
+        self.assertEqual(type(obj.l), ListSubclass)
+
+        #assert False
 
 
     def test_simple(self):
