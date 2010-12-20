@@ -135,7 +135,7 @@ class TestCouchable(unittest.TestCase):
         self.assertEqual(doctest.testmod(couchable.core,
                 optionflags=(doctest.REPORT_CDIFF | doctest.NORMALIZE_WHITESPACE | doctest.ELLIPSIS))[0], 0)
 
-    def test_2_baseTypeSubclasses(self):
+    def test_2_baseTypeSubclasses_1(self):
         obj = Simple(d=DictSubclass(a=1, b=2), l=ListSubclass([1,2,3]))
 
         _id = self.cdb.store(obj)
@@ -148,7 +148,78 @@ class TestCouchable(unittest.TestCase):
         self.assertEqual(type(obj.d), DictSubclass)
         self.assertEqual(type(obj.l), ListSubclass)
 
+    def test_2_baseTypeSubclasses_2(self):
+        obj = DictSubclass(d=DictSubclass(a=1, b=2), l=ListSubclass([1,2,3]))
+        obj.x = 4
+
+        _id = self.cdb.store(obj)
+
+        del obj
+        self.assertFalse(self.cdb._obj_by_id)
+
+        obj = self.cdb.load(_id)
+
+        print obj
+        print obj.__dict__
+
+        self.assertEqual(obj.x, 4)
+        self.assertEqual(type(obj['d']), DictSubclass)
+        self.assertEqual(type(obj['l']), ListSubclass)
         #assert False
+
+    def test_2_binaryStrings_1(self):
+        s = 'abc\xaa\xbb\xcc this is the tricky part: \\xddd'
+        obj = Simple(s=s)
+
+        _id = self.cdb.store(obj)
+
+        del obj
+        self.assertFalse(self.cdb._obj_by_id)
+
+        obj = self.cdb.load(_id)
+
+        self.assertEquals(obj.s, s)
+
+    def test_2_binaryStrings_2(self):
+        #s = 'abc\xaa\xbb\xcc this is the tricky part: \\xddd'
+        s = ''.join([chr(x) for x in range(256)])
+        obj = Simple(s=s)
+
+        _id = self.cdb.store(obj)
+
+        del obj
+        self.assertFalse(self.cdb._obj_by_id)
+
+        obj = self.cdb.load(_id)
+
+        self.assertEquals(obj.s, s)
+
+    def test_2_binaryStrings_3(self):
+        #s = 'abc\xaa\xbb\xcc this is the tricky part: \\xddd'
+        s = ''.join([chr(x) for x in range(127)])
+        obj = Simple(s=s)
+
+        _id = self.cdb.store(obj)
+
+        del obj
+        self.assertFalse(self.cdb._obj_by_id)
+
+        obj = self.cdb.load(_id)
+
+        self.assertEquals(obj.s, s)
+
+    def test_2_nullStrings(self):
+        s = '\x00abc\xaa\xbb\xcc this is the tricky part: \\xddd'
+        obj = Simple(s=s)
+
+        _id = self.cdb.store(obj)
+
+        del obj
+        self.assertFalse(self.cdb._obj_by_id)
+
+        obj = self.cdb.load(_id)
+
+        self.assertEquals(obj.s, s)
 
 
     def test_simple(self):

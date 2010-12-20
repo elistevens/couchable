@@ -110,35 +110,29 @@ class UncouchableException(Exception):
 
 # type packing / unpacking
 _pack_handlers = collections.OrderedDict()
+_unpack_handlers = collections.OrderedDict()
 def _packer(*args):
     def func(func_):
         for type_ in args:
-            packer(type_, func_)
+            _pack_handlers[type_] = func_
+            _pack_handlers[typestr(type_)] = func_
+            #packer(type_, func_)
         return func_
     return func
 
-def packer(type_, func_):
-    """
-    This function is still in potential flux.  Writing new (un)packers is delicate; please see the source.
-    """
-    _pack_handlers[type_] = func_
-    _pack_handlers[typestr(type_)] = func_
+def custom_packer(type_, pack_func, unpack_func, simple=True):
+    if simple:
+        _pack_func = lambda self, parent_doc, data, attachment_list, name, isKey: '{}{}:{}:{}'.format(FIELD_NAME, 'custom', typestr(data), pack_func(data))
+        _unpack_func = lambda s: unpack_func(s)
+    else:
+        _pack_func = pack_func
+        _unpack_func = unpack_func
 
-#_unpack_handlers = collections.OrderedDict()
-#def _unpacker(*args):
-#    def func(func_):
-#        for type_ in args:
-#            unpacker(type_, func_)
-#        return func_
-#    return func
-#
-#def unpacker(type_, func_):
-#    """
-#    This function is still in potential flux.  Writing new (un)packers is delicate; please see the source.
-#    """
-#    _unpack_handlers[type_] = func_
-#    _unpack_handlers[typestr(type_)] = func_
+    _pack_handlers[type_] = _pack_func
+    _pack_handlers[typestr(type_)] = _pack_func
 
+    _unpack_handlers[type_] = _unpack_func
+    _unpack_handlers[typestr(type_)] = _unpack_func
 
 
 # function for navigating the above dics of handlers, etc.
@@ -341,11 +335,26 @@ class CouchableDb(object):
 
         # Actually (finally) send the data to couchdb.
         #try:
-            #pprint.pprint([(x[0]._id, getattr(x[0], '_rev', None)) for x in self._done_dict.values()])
-            #print datetime.datetime.now(), "214: self.db.update"
+        #    #pprint.pprint([(x[0]._id, getattr(x[0], '_rev', None)) for x in self._done_dict.values()])
+        #    print datetime.datetime.now(), "214: self.db.update"
+        #    ret_list = []
+        #    for x in self._done_dict.values():
+        #        ret_list.extend(self.db.update([x[1]]))
+        #except:
+        #    import json
+        #    print >>file('/tmp/json_failure.out', 'wb'), json.dumps(x[1])
+        #    print len(repr(self._done_dict.values()))
+        #    print type(self._done_dict.values()[0][1])
+        #    raise
+
+        #try:
+        #    #pprint.pprint([(x[0]._id, getattr(x[0], '_rev', None)) for x in self._done_dict.values()])
+        #    print datetime.datetime.now(), "214: self.db.update"
         ret_list = self.db.update([x[1] for x in self._done_dict.values()])
         #except:
-        #    print self._done_dict.values()
+        #    print >>file('/tmp/json_failure.out', 'wb'), json.encode(
+        #    print len(repr(self._done_dict.values()))
+        #    print type(self._done_dict.values()[0][1])
         #    raise
 
         for ret, store_tuple in itertools.izip(ret_list, self._done_dict.values()):
@@ -573,8 +582,24 @@ class CouchableDb(object):
         >>> cdb._pack_native(parent_doc, data, attachment_list, 'myname', False)
         'couchable:append:str:couchable:must escape this'
         """
+        #if len(data) > 1024:
+        #    return self._pack_attachment(parent_doc, data, attachment_list, name, isKey)
 
-        if data.startswith(FIELD_NAME):
+        highBytes = False
+
+        if isinstance(data, str):
+            try:
+                data.encode('ascii')
+            except:
+                #print "Found some high bytes:", data.encode('hex_codec')
+                highBytes = True
+
+
+        if highBytes or len(data) > 1024:
+            #return '{}{}:{}:{}'.format(FIELD_NAME, 'repr', typestr(data), data.encode('hex_codec'))
+            return self._pack_attachment(parent_doc, data, attachment_list, name, isKey)
+
+        elif data.startswith(FIELD_NAME):
             return '{}{}:{}:{}'.format(FIELD_NAME, 'append', typestr(data), data)
         else:
             return data
@@ -715,6 +740,7 @@ class CouchableDb(object):
                 'kwargs': {},
                 'module': '__builtin__'}}}}}
         """
+        # FIXME: ...
         if type(data) is not dict:
             assert not isObjDict
 
@@ -728,7 +754,7 @@ class CouchableDb(object):
 
         doc = {self._pack(parent_doc, k, attachment_list, '{}>{}'.format(name, str(k)), True):
             self._pack(parent_doc, v, attachment_list, '{}.{}'.format(name, str(k)), False)
-            for k,v in data.items() if k not in private_keys and k not in ['_attachments', '_cdb']}
+            for k,v in data.items() if k not in private_keys and k not in set(['_attachments', '_cdb'])}
 
         #assert '_attachments' not in doc, ', '.join([str(data), str(isObjDict)])
 
@@ -783,8 +809,8 @@ class CouchableDb(object):
                             return __builtins__.get(type_str)(data)
                         elif type_str == '__builtin__.NoneType':
                             return None
-                        #else:
-                        #    return importstr(*type_str.rsplit('.', 1))(data)
+                        else:
+                            return importstr(*type_str.rsplit('.', 1))(data)
 
                     elif method_str == 'key':
                         return self._unpack(parent_doc, parent_doc[FIELD_NAME]['keys'][doc], loaded_dict)
@@ -800,6 +826,14 @@ class CouchableDb(object):
                             base_cls, handler_tuple = findHandler(type_str, _attachment_handlers)
                             attachment_response = self.db.get_attachment(parent_doc, data)
                             return handler_tuple[1](attachment_response.read())
+
+                    elif method_str == 'custom':
+                        base_cls, unpack_func = findHandler(type_str, _unpack_handlers)
+                        #attachment_response = self.db.get_attachment(parent_doc, data)
+                        #return handler_tuple[1](attachment_response.read())
+
+                        #unpack_func = handler_tuple[1]
+                        return unpack_func(data)
                     else:
                         # FIXME: error?
                         pass
@@ -822,7 +856,12 @@ class CouchableDb(object):
 
                     if 'args' in info and 'kwargs' in info:
                         #print cls, doc['args'], doc['kwargs']
-                        inst = cls(*info['args'], **info['kwargs'])
+                        try:
+                            inst = cls(*info['args'], **info['kwargs'])
+                        except:
+                            print cls, info['args'], info['kwargs']
+                            raise
+
                     else:
                         if inst is None:
                             inst = cls.__new__(cls)
