@@ -163,6 +163,7 @@ class TestCouchable(unittest.TestCase):
         print obj.__dict__
 
         self.assertEqual(obj.x, 4)
+        self.assertEqual(type(obj), DictSubclass)
         self.assertEqual(type(obj['d']), DictSubclass)
         self.assertEqual(type(obj['l']), ListSubclass)
         #assert False
@@ -222,7 +223,7 @@ class TestCouchable(unittest.TestCase):
         self.assertEquals(obj.s, s)
 
 
-    def test_simple(self):
+    def test_1_simple(self):
         obj = Simple(**self.simple_dict)
 
         _id = self.cdb.store(obj)
@@ -388,7 +389,7 @@ class TestCouchable(unittest.TestCase):
         del c
         self.assertFalse(self.cdb._obj_by_id)
 
-        self.assertIn('.attach', self.cdb.db[_id]['_attachments'])
+        self.assertIn('self.attach', self.cdb.db[_id]['_attachments'])
 
         a = self.cdb.load(_id)
 
@@ -431,7 +432,7 @@ class TestCouchable(unittest.TestCase):
         del c
         self.assertFalse(self.cdb._obj_by_id)
 
-        self.assertIn('.attach', self.cdb.db[_id]['_attachments'])
+        self.assertIn('self.attach', self.cdb.db[_id]['_attachments'])
 
         a = self.cdb.load(_id)
 

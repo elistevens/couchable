@@ -334,6 +334,7 @@ class CouchableDb(object):
             self._store(obj)
 
         # Actually (finally) send the data to couchdb.
+        ret_list = self.db.update([x[1] for x in self._done_dict.values()])
         #try:
         #    #pprint.pprint([(x[0]._id, getattr(x[0], '_rev', None)) for x in self._done_dict.values()])
         #    print datetime.datetime.now(), "214: self.db.update"
@@ -347,15 +348,6 @@ class CouchableDb(object):
         #    print type(self._done_dict.values()[0][1])
         #    raise
 
-        #try:
-        #    #pprint.pprint([(x[0]._id, getattr(x[0], '_rev', None)) for x in self._done_dict.values()])
-        #    print datetime.datetime.now(), "214: self.db.update"
-        ret_list = self.db.update([x[1] for x in self._done_dict.values()])
-        #except:
-        #    print >>file('/tmp/json_failure.out', 'wb'), json.encode(
-        #    print len(repr(self._done_dict.values()))
-        #    print type(self._done_dict.values()[0][1])
-        #    raise
 
         for ret, store_tuple in itertools.izip(ret_list, self._done_dict.values()):
             success, _id, _rev = ret
@@ -398,15 +390,12 @@ class CouchableDb(object):
             self._done_dict[obj._id] = (obj, {}, [])
 
             attachment_list = []
+
             # This code matches the code in _pack_object
-            #doc = self._obj2doc_empty(obj)
-            #doc.update(self._pack_dict_keyMeansObject(doc, obj.__dict__, attachment_list, '', True))
-
             doc = {}
-            doc.update(self._pack_dict_keyMeansObject(doc, obj.__dict__, attachment_list, '', True))
-            doc = self._objInfo_doc(obj, doc)
-
-            #self._pack(doc, obj, attachment_list)
+            #doc.update(self._pack_dict_keyMeansObject(doc, obj.__dict__, attachment_list, '', True))
+            #doc = self._objInfo_doc(obj, doc)
+            self._pack_object(doc, obj, attachment_list, 'self', False, True)
 
             self._done_dict[obj._id] = (obj, doc, attachment_list)
 
@@ -483,7 +472,7 @@ class CouchableDb(object):
 
     # This needs to be first, so that it's the last to match in _pack(...)
     @_packer(object)
-    def _pack_object(self, parent_doc, data, attachment_list, name, isKey):
+    def _pack_object(self, parent_doc, data, attachment_list, name, isKey, topLevel=False):
         """
         >>> cdb=CouchableDb('testing')
         >>> parent_doc = {}
@@ -513,31 +502,48 @@ class CouchableDb(object):
                 'kwargs': {},
                 'module': '__builtin__'}}}}}
         """
+        assert not (isKey and topLevel)
+
         cls = type(data)
         base_cls, callback_tuple = findHandler(cls, _couchable_types)
 
-        if base_cls:
+        # Means this needs to be a new top-level document.
+        if base_cls and not topLevel:
             self._store(data)
 
             return '{}{}:{}'.format(FIELD_NAME, 'id', data._id)
+
+        # key means that we store the obj in doc['couchable:']['keys']
+        if isKey:
+            key_str = '{}{}:{}:{!r}'.format(FIELD_NAME, 'key', typestr(cls), data)
+
+            parent_doc.setdefault(FIELD_NAME, {})
+            parent_doc[FIELD_NAME].setdefault('keys', {})
+            parent_doc[FIELD_NAME]['keys'][key_str] = self._pack_object(parent_doc, data, attachment_list, name, False, topLevel)
+
+            return key_str
+
+        # Non-__dict__-having objects are usually C-based, so we pickle them.
+        if not hasattr(data, '__dict__'):
+            return self._pack_attachment(parent_doc, data, attachment_list, name, isKey)
+
+
+        if topLevel:
+            doc = parent_doc
         else:
-            if isKey:
-                key_str = '{}{}:{}:{!r}'.format(FIELD_NAME, 'key', typestr(cls), data)
+            doc = {}
 
-                parent_doc.setdefault(FIELD_NAME, {})
-                parent_doc[FIELD_NAME].setdefault('keys', {})
-                parent_doc[FIELD_NAME]['keys'][key_str] = self._pack_object(parent_doc, data, attachment_list, name, False)
+        doc.update(self._pack_dict_keyMeansObject(parent_doc, data.__dict__, attachment_list, name, True))
+        doc = self._objInfo_doc(data, doc)
 
-                return key_str
-            elif not hasattr(data, '__dict__'):
-                return self._pack_attachment(parent_doc, data, attachment_list, name, isKey)
-            else:
-                # This code matches the code in _store
-                doc = {}
-                doc.update(self._pack_dict_keyMeansObject(parent_doc, data.__dict__, attachment_list, name, True))
-                doc = self._objInfo_doc(data, doc)
+        if isinstance(data, dict) and type(data) is not dict:
+            doc[FIELD_NAME]['dict'] = self._pack_dict_keyMeansObject(parent_doc, dict(dict.items(data)), attachment_list, name, False)
 
-                return doc
+        if isinstance(data, list) and type(data) is not list:
+            doc[FIELD_NAME]['list'] = self._pack_list_noKey(parent_doc, list(list.__iter__(data)), attachment_list, name, False)
+
+
+        return doc
 
     @_packer(type(os))
     def _pack_module(self, parent_doc, data, attachment_list, name, isKey):
@@ -707,7 +713,9 @@ class CouchableDb(object):
         if type(data) is not list:
             #assert not isObjDict
 
-            return self._objInfo_consargs(data, {}, [self._pack_list_noKey(parent_doc, list(data), attachment_list, name, False)])
+            return self._pack_object(parent_doc, data, attachment_list, name, isKey)
+
+            #return self._objInfo_consargs(data, {}, [self._pack_list_noKey(parent_doc, list(data), attachment_list, name, False)])
 
         return [self._pack(parent_doc, x, attachment_list, '{}[{}]'.format(name, i), False) for i, x in enumerate(data)]
 
@@ -744,7 +752,8 @@ class CouchableDb(object):
         if type(data) is not dict:
             assert not isObjDict
 
-            return self._objInfo_consargs(data, {}, [], self._pack_dict_keyMeansObject(parent_doc, dict(data.items()), attachment_list, name, False))
+            #return self._objInfo_consargs(data, {}, [], self._pack_dict_keyMeansObject(parent_doc, dict(data.items()), attachment_list, name, False))
+            return self._pack_object(parent_doc, data, attachment_list, name, False) # FIXME???
 
 
         if isObjDict:
@@ -880,6 +889,11 @@ class CouchableDb(object):
 
                         # If we haven't stuffed the cache AND pre-set the id/rev, then this goes into an infinite loop.  See test_docCycles
                         inst.__dict__.update({self._unpack(parent_doc, k, loaded_dict): self._unpack(parent_doc, v, loaded_dict) for k,v in doc.items() if k != FIELD_NAME})
+
+                        if 'list' in info:
+                            list.extend(inst, self._unpack(parent_doc, info['list'], loaded_dict))
+                        if 'dict' in info:
+                            dict.update(inst, self._unpack(parent_doc, info['dict'], loaded_dict))
 
                         #print "unpack isinstance(doc, dict) inst:", inst.__dict__.get('_id', 'still no id')
                         #print "unpack isinstance(doc, dict) inst:", inst.__dict__.get('_rev', 'still no rev')
