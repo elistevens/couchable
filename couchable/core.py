@@ -383,7 +383,8 @@ class CouchableDb(object):
             func_tuple[0](obj, self)
 
         if not hasattr(obj, '_id'):
-            obj._id = '{}:{}'.format(typestr(obj), uuid.uuid4()).lstrip('_')
+            #obj._id = '{}:{}'.format(typestr(obj), uuid.uuid4()).lstrip('_')
+            newid(obj)
             assert obj._id not in self._obj_by_id
 
         if obj._id not in self._done_dict:
@@ -1052,13 +1053,15 @@ class CouchableDoc(object):
 
 registerDocType(CouchableDoc, lambda obj, cdb: obj.preStore(cdb), lambda obj, cdb: obj.postLoad(cdb))
 
-def newid(obj, id_func, noUuid=False, noType=False, sep=':'):
+def newid(obj, id_func=None, noUuid=False, noType=False, sep=':'):
     """
     Helper function to make document IDs more readable.
 
     By default, CouchableDb document IDs have the following form:
 
     C{module.Class:UUID}
+
+    Python's uuid.uuid1() is used (this includes the network address).
 
     The intent is that each document ID will be reasonably easy to read and
     identify at a glance.  However, for some document classes, there is a more
@@ -1097,12 +1100,14 @@ def newid(obj, id_func, noUuid=False, noType=False, sep=':'):
         if not noType:
             id_list.append(typestr(obj))
 
-        id_list.append(str(id_func(obj)))
+        if id_func is not None:
+            id_list.append(str(id_func(obj)))
 
+        # FIXME: I think this needs to be first for couchdb performance reasons.
         if not noUuid:
-            id_list.append(str(uuid.uuid4()))
+            id_list.append(str(uuid.uuid1()))
 
-        obj._id = sep.join(id_list)
+        obj._id = sep.join(id_list).lstrip('_')
 
 # Attachments
 def doGzip(data):
