@@ -214,7 +214,7 @@ class CouchableDb(object):
 
         self.db = db
 
-        self._maxStrLen = 64
+        self._maxStrLen = 256
 
         self._init_views()
 
@@ -360,7 +360,7 @@ class CouchableDb(object):
                 for content_name, content_tup in attachment_dict.items():
                     if content_name == 'pickles':
                         content = doGzip(pickle.dumps(content_tup, pickle.HIGHEST_PROTOCOL))
-                        content_type = 'application/octet-stream'
+                        content_type = 'application/pickle'
                     else:
                         content, content_type = content_tup
                     #print datetime.datetime.now(), "225: self.db.put_attachment"
