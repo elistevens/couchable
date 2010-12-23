@@ -20,6 +20,7 @@
 
 
 # stdlib
+import collections
 import copy
 import cPickle as pickle
 import datetime
@@ -105,6 +106,8 @@ class ListSubclass(list):
         return iter('foo')
     def __getitem__(self, key):
         return 'foo'
+
+ABC = collections.namedtuple('ABC', 'a,b,c')
 
 
 class TestCouchable(unittest.TestCase):
@@ -247,6 +250,20 @@ class TestCouchable(unittest.TestCase):
         self.assertEqual(obj.__class__, Simple)
         for key, value in self.simple_dict.items():
             self.assertEqual(getattr(obj, key), value)
+
+    def test_3_namedtuple(self):
+        obj = Simple(abc=ABC(1,2,3))
+
+        _id = self.cdb.store(obj)
+
+        del obj
+        self.assertFalse(self.cdb._obj_by_id)
+
+        obj = self.cdb.load(_id)
+
+        self.assertEqual(type(obj.abc), ABC)
+        self.assertEqual(obj.abc.a, 1)
+
 
 
     def test_nonStrKeys(self):

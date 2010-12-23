@@ -694,6 +694,10 @@ class CouchableDb(object):
             parent_doc[FIELD_NAME]['keys'][key_str] = self._pack_consargs_keyAsKey(parent_doc, data, attachment_dict, name, False)
 
             return key_str
+
+        # This means it's probably a named tuple.
+        elif isinstance(data, tuple) and type(data) != tuple:
+            return self._objInfo_consargs(data, {}, self._pack_list_noKey(parent_doc, list(data), attachment_dict, name, False))
         else:
             return self._objInfo_consargs(data, {}, [self._pack_list_noKey(parent_doc, list(data), attachment_dict, name, False)])
 
