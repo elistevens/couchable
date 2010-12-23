@@ -95,10 +95,16 @@ couchable.registerAttachmentType(AftermarketAttachment,
         content_type='application/octet-stream', gzip=True)
 
 class DictSubclass(dict):
-    pass
+    def __iter__(self):
+        return iter('foo')
+    def __getitem__(self, key):
+        return 'foo'
 
 class ListSubclass(list):
-    pass
+    def __iter__(self):
+        return iter('foo')
+    def __getitem__(self, key):
+        return 'foo'
 
 
 class TestCouchable(unittest.TestCase):
@@ -149,7 +155,7 @@ class TestCouchable(unittest.TestCase):
         self.assertEqual(type(obj.l), ListSubclass)
 
     def test_2_baseTypeSubclasses_2(self):
-        obj = DictSubclass(d=DictSubclass(a=1, b=2), l=ListSubclass([1,2,3]))
+        obj = DictSubclass(d=DictSubclass(a=1, b=2), l=ListSubclass([DictSubclass(e=5, f=6),1,2,3]))
         obj.x = 4
 
         _id = self.cdb.store(obj)
@@ -164,8 +170,13 @@ class TestCouchable(unittest.TestCase):
 
         self.assertEqual(obj.x, 4)
         self.assertEqual(type(obj), DictSubclass)
-        self.assertEqual(type(obj['d']), DictSubclass)
-        self.assertEqual(type(obj['l']), ListSubclass)
+        self.assertEqual(type(dict.__getitem__(obj, 'd')), DictSubclass)
+        self.assertEqual(type(dict.__getitem__(obj, 'l')), ListSubclass)
+
+        l = dict.__getitem__(obj, 'l')
+        #list.__getitem__(l, 0)
+
+        self.assertEqual(type(list.__getitem__(l, 0)), DictSubclass)
         #assert False
 
     def test_2_binaryStrings_1(self):
@@ -258,7 +269,7 @@ class TestCouchable(unittest.TestCase):
 
 
     def test_private(self):
-        a = SimpleDoc(name='AAA', _implementationDetail='foo', b=Simple(_morePrivate='bbb'))
+        a = SimpleDoc(name='AAA', _implementationDetail='foo', b=Simple(_morePrivate='bbb'), _inst=Simple(i='j'))
 
         a_id = self.cdb.store(a)
 
@@ -270,6 +281,8 @@ class TestCouchable(unittest.TestCase):
         self.assertEqual(type(a), SimpleDoc)
         self.assertTrue(hasattr(a, '_implementationDetail'))
         self.assertTrue(hasattr(a.b, '_morePrivate'))
+
+        self.assertEqual(type(a._inst), Simple)
 
         a_id = self.cdb.store(a)
 

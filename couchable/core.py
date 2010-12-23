@@ -905,7 +905,9 @@ class CouchableDb(object):
                         #print "unpack isinstance(doc, dict) doc:", doc.get('_id', 'still no id')
                         #print "unpack isinstance(doc, dict) doc:", doc.get('_rev', 'still no rev')
 
-                        inst.__dict__.update(info.get('private', {}))
+                        #inst.__dict__.update(info.get('private', {}))
+                        inst.__dict__.update({self._unpack(parent_doc, k, loaded_dict): self._unpack(parent_doc, v, loaded_dict) for k,v in info.get('private', {}).items()})
+
                         if '_id' in doc:
                             inst.__dict__['_id'] = doc['_id']
                             inst.__dict__['_rev'] = doc['_rev']
