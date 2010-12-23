@@ -695,8 +695,10 @@ class CouchableDb(object):
 
             return key_str
 
-        # This means it's probably a named tuple.
-        elif isinstance(data, tuple) and type(data) != tuple:
+        # FIXME: we need a better check here, because this won't work with tuple
+        # subclasses that aren't named tuple (and that don't override __new__).
+        # I have no idea how to accomplish this 100%.
+        elif isinstance(data, tuple) and type(data) != tuple and type(data).__new__ != tuple.__new__:
             return self._objInfo_consargs(data, {}, self._pack_list_noKey(parent_doc, list(data), attachment_dict, name, False))
         else:
             return self._objInfo_consargs(data, {}, [self._pack_list_noKey(parent_doc, list(data), attachment_dict, name, False)])

@@ -64,7 +64,7 @@ def main(options, arguments):
             }
         }''')
     view.sync(cdb.db)
-    
+
     # ...
 
     viewResult = view(cdb.db, include_docs=True, startkey=['example', 'Container'], endkey=['example', 'Container', {}])
@@ -84,7 +84,7 @@ All of the object dumps are taken from Futon.
 ...     def __init__(self, **kwargs):
 ...         for name, value in kwargs.items():
 ...             setattr(self, name, value)
-... 
+...
 >>> a = SimpleDoc(name='AAA')
 >>> cdb.store(a)
 'main__.SimpleDoc:2a208810-467f-4feb-a5bb-98d0beb1e5e7'
@@ -346,3 +346,16 @@ flagged as needing to be a full document.  Similar to the other string
 pointers encountered already, couchable:id points to an object stored in an
 entirely different document.
 
+Known Limitations
+=================
+
+In general, couchable doesn't play well with classes that override __new__ in
+odd ways.
+
+Couchable cannot (and will probably never) store instances of the following
+types:
+
+- Tuple subclasses that override __new__ that *don't* do so in a way that is
+compatible with collections.namedtuple.
+
+This list may not be exhaustive; unknown limitations may exist.

@@ -107,7 +107,15 @@ class ListSubclass(list):
     def __getitem__(self, key):
         return 'foo'
 
-ABC = collections.namedtuple('ABC', 'a,b,c')
+NamedTupleABC = collections.namedtuple('NamedTupleABC', 'a,b,c')
+
+class TupleSubclass(tuple):
+    pass
+
+# FIXME: need to support this...
+#class TupleSubclassNew(tuple):
+#    def __new__(...):
+#        ...
 
 
 class TestCouchable(unittest.TestCase):
@@ -252,7 +260,7 @@ class TestCouchable(unittest.TestCase):
             self.assertEqual(getattr(obj, key), value)
 
     def test_3_namedtuple(self):
-        obj = Simple(abc=ABC(1,2,3))
+        obj = Simple(abc=NamedTupleABC(1,2,3), ts=TupleSubclass([1,2,3,4,5]))
 
         _id = self.cdb.store(obj)
 
@@ -261,8 +269,11 @@ class TestCouchable(unittest.TestCase):
 
         obj = self.cdb.load(_id)
 
-        self.assertEqual(type(obj.abc), ABC)
+        self.assertEqual(type(obj.abc), NamedTupleABC)
         self.assertEqual(obj.abc.a, 1)
+
+        self.assertEqual(type(obj.ts), TupleSubclass)
+        self.assertEqual(obj.ts[3], 4)
 
 
 
