@@ -122,7 +122,7 @@ def _packer(*args):
 
 def custom_packer(type_, pack_func, unpack_func, simple=True):
     if simple:
-        _pack_func = lambda self, parent_doc, data, attachment_list, name, isKey: '{}{}:{}:{}'.format(FIELD_NAME, 'custom', typestr(data), pack_func(data))
+        _pack_func = lambda self, parent_doc, data, attachment_dict, name, isKey: '{}{}:{}:{}'.format(FIELD_NAME, 'custom', typestr(data), pack_func(data))
         _unpack_func = lambda s: unpack_func(s)
     else:
         _pack_func = pack_func
@@ -180,6 +180,7 @@ class CouchableDb(object):
     """
 
     _obj_by_id_cache = weakref.WeakValueDictionary()
+    _cls2srcMd5sum_dict = {}
 
     def __init__(self, name=None, url='http://localhost:5984/', db=None):
         """
@@ -351,9 +352,14 @@ class CouchableDb(object):
 
         for ret, store_tuple in itertools.izip(ret_list, self._done_dict.values()):
             success, _id, _rev = ret
-            obj, doc, attachment_list = store_tuple
+            obj, doc, attachment_dict = store_tuple
             if success:
-                for content, content_name, content_type in attachment_list:
+                for content_name, content_tup in attachment_dict.items():
+                    if content_name == 'pickles':
+                        content = pickle.dumps(content_tup)
+                        content_type = 'application/octet-stream'
+                    else:
+                        content, content_type = content_tup
                     #print datetime.datetime.now(), "225: self.db.put_attachment"
                     self.db.put_attachment(doc, content, content_name, content_type)
 
@@ -390,28 +396,28 @@ class CouchableDb(object):
         if obj._id not in self._done_dict:
             self._done_dict[obj._id] = (obj, {}, [])
 
-            attachment_list = []
+            attachment_dict = {}
 
             # This code matches the code in _pack_object
             doc = {}
-            #doc.update(self._pack_dict_keyMeansObject(doc, obj.__dict__, attachment_list, '', True))
+            #doc.update(self._pack_dict_keyMeansObject(doc, obj.__dict__, attachment_dict, '', True))
             #doc = self._objInfo_doc(obj, doc)
-            self._pack_object(doc, obj, attachment_list, 'self', False, True)
+            self._pack_object(doc, obj, attachment_dict, 'self', False, True)
 
-            self._done_dict[obj._id] = (obj, doc, attachment_list)
+            self._done_dict[obj._id] = (obj, doc, attachment_dict)
 
             obj._cdb = self
 
 
-    def _pack(self, parent_doc, data, attachment_list, name, isKey=False):
+    def _pack(self, parent_doc, data, attachment_dict, name, isKey=False):
         cls = type(data)
 
         base_cls, handler = findHandler(cls, _pack_handlers)
 
-        return handler(self, parent_doc, data, attachment_list, name, isKey)
+        return handler(self, parent_doc, data, attachment_dict, name, isKey)
         #if handler:
         #    try:
-        #        return handler(self, parent_doc, data, attachment_list, name, isKey)
+        #        return handler(self, parent_doc, data, attachment_dict, name, isKey)
         #    except RuntimeError:
         #        print "Error with", cls, data
         #        raise
@@ -419,11 +425,11 @@ class CouchableDb(object):
         #    raise UncouchableException("No _packer for type", cls, data)
 
         #if cls in _pack_handlers:
-        #    return _pack_handlers[cls](self, parent_doc, data, attachment_list, name, isKey)
+        #    return _pack_handlers[cls](self, parent_doc, data, attachment_dict, name, isKey)
         #else:
         #    for types, func in reversed(_pack_handlers.items()):
         #        if isinstance(data, types):
-        #            return func(self, parent_doc, data, attachment_list, name, isKey)
+        #            return func(self, parent_doc, data, attachment_dict, name, isKey)
         #            break
         #    else:
         #        raise UncouchableException("No _packer for type", cls, data)
@@ -443,7 +449,10 @@ class CouchableDb(object):
             doc[FIELD_NAME]['module'] = str(cls.__module__)
 
         try:
-            doc[FIELD_NAME]['src_md5'] = hashlib.md5(inspect.getsource(cls)).hexdigest()
+            if cls not in self._cls2srcMd5sum_dict:
+                self._cls2srcMd5sum_dict[cls] = hashlib.md5(inspect.getsource(cls)).hexdigest()
+
+            doc[FIELD_NAME]['src_md5'] = self._cls2srcMd5sum_dict[cls]
         except (IOError, TypeError):
             pass
 
@@ -473,11 +482,11 @@ class CouchableDb(object):
 
     # This needs to be first, so that it's the last to match in _pack(...)
     @_packer(object)
-    def _pack_object(self, parent_doc, data, attachment_list, name, isKey, topLevel=False):
+    def _pack_object(self, parent_doc, data, attachment_dict, name, isKey, topLevel=False):
         """
         >>> cdb=CouchableDb('testing')
         >>> parent_doc = {}
-        >>> attachment_list = []
+        >>> attachment_dict = {}
         >>> class Foo(object):
         ...     def __init__(self):
         ...         self.a = 'a'
@@ -486,7 +495,7 @@ class CouchableDb(object):
         ...         self.d = {1:2, (3,4,5):(6,7)}
         ...
         >>> data = Foo()
-        >>> pprint.pprint(cdb._pack_object(parent_doc, data, attachment_list, 'myname', False))
+        >>> pprint.pprint(cdb._pack_object(parent_doc, data, attachment_dict, 'myname', False))
         {'a': 'a',
          'b': u'b',
          'c': 'couchable:append:str:couchable:',
@@ -520,13 +529,13 @@ class CouchableDb(object):
 
             parent_doc.setdefault(FIELD_NAME, {})
             parent_doc[FIELD_NAME].setdefault('keys', {})
-            parent_doc[FIELD_NAME]['keys'][key_str] = self._pack_object(parent_doc, data, attachment_list, name, False, topLevel)
+            parent_doc[FIELD_NAME]['keys'][key_str] = self._pack_object(parent_doc, data, attachment_dict, name, False, topLevel)
 
             return key_str
 
         # Non-__dict__-having objects are usually C-based, so we pickle them.
         if not hasattr(data, '__dict__'):
-            return self._pack_attachment(parent_doc, data, attachment_list, name, isKey)
+            return self._pack_pickle(parent_doc, data, attachment_dict, name, isKey)
 
 
         if topLevel:
@@ -534,30 +543,30 @@ class CouchableDb(object):
         else:
             doc = {}
 
-        doc.update(self._pack_dict_keyMeansObject(parent_doc, data.__dict__, attachment_list, name, True))
+        doc.update(self._pack_dict_keyMeansObject(parent_doc, data.__dict__, attachment_dict, name, True))
         doc = self._objInfo_doc(data, doc)
 
         if isinstance(data, dict) and type(data) is not dict:
-            doc[FIELD_NAME]['dict'] = self._pack_dict_keyMeansObject(parent_doc, dict(dict.items(data)), attachment_list, name, False)
+            doc[FIELD_NAME]['dict'] = self._pack_dict_keyMeansObject(parent_doc, dict(dict.items(data)), attachment_dict, name, False)
 
         if isinstance(data, list) and type(data) is not list:
-            doc[FIELD_NAME]['list'] = self._pack_list_noKey(parent_doc, list(list.__iter__(data)), attachment_list, name, False)
+            doc[FIELD_NAME]['list'] = self._pack_list_noKey(parent_doc, list(list.__iter__(data)), attachment_dict, name, False)
 
 
         return doc
 
     @_packer(type(os))
-    def _pack_module(self, parent_doc, data, attachment_list, name, isKey):
+    def _pack_module(self, parent_doc, data, attachment_dict, name, isKey):
         """
         >> import os.path
         >>> cdb=CouchableDb('testing')
         >>> parent_doc = {}
-        >>> attachment_list = []
+        >>> attachment_dict = {}
 
         >>> data = os.path
-        >>> cdb._pack_module(parent_doc, data, attachment_list, 'myname', False)
+        >>> cdb._pack_module(parent_doc, data, attachment_dict, 'myname', False)
         'couchable:module:os.path'
-        >>> cdb._pack_module(parent_doc, data, attachment_list, 'myname', True)
+        >>> cdb._pack_module(parent_doc, data, attachment_dict, 'myname', True)
         'couchable:module:os.path'
         """
 
@@ -567,30 +576,30 @@ class CouchableDb(object):
 
 
     @_packer(str, unicode)
-    def _pack_native(self, parent_doc, data, attachment_list, name, isKey):
+    def _pack_native(self, parent_doc, data, attachment_dict, name, isKey):
         """
         >>> cdb=CouchableDb('testing')
         >>> parent_doc = {}
-        >>> attachment_list = []
+        >>> attachment_dict = {}
 
         >>> data = 'byte string'
-        >>> cdb._pack_native(parent_doc, data, attachment_list, 'myname', False)
+        >>> cdb._pack_native(parent_doc, data, attachment_dict, 'myname', False)
         'byte string'
-        >>> cdb._pack_native(parent_doc, data, attachment_list, 'myname', True)
+        >>> cdb._pack_native(parent_doc, data, attachment_dict, 'myname', True)
         'byte string'
 
         >>> data = u'unicode string'
-        >>> cdb._pack_native(parent_doc, data, attachment_list, 'myname', False)
+        >>> cdb._pack_native(parent_doc, data, attachment_dict, 'myname', False)
         u'unicode string'
-        >>> cdb._pack_native(parent_doc, data, attachment_list, 'myname', True)
+        >>> cdb._pack_native(parent_doc, data, attachment_dict, 'myname', True)
         u'unicode string'
 
         >>> data = 'couchable:must escape this'
-        >>> cdb._pack_native(parent_doc, data, attachment_list, 'myname', False)
+        >>> cdb._pack_native(parent_doc, data, attachment_dict, 'myname', False)
         'couchable:append:str:couchable:must escape this'
         """
         #if len(data) > 1024:
-        #    return self._pack_attachment(parent_doc, data, attachment_list, name, isKey)
+        #    return self._pack_attachment(parent_doc, data, attachment_dict, name, isKey)
 
         highBytes = False
 
@@ -604,7 +613,7 @@ class CouchableDb(object):
 
         if highBytes or len(data) > 1024:
             #return '{}{}:{}:{}'.format(FIELD_NAME, 'repr', typestr(data), data.encode('hex_codec'))
-            return self._pack_attachment(parent_doc, data, attachment_list, name, isKey)
+            return self._pack_pickle(parent_doc, data, attachment_dict, name, isKey)
 
         elif data.startswith(FIELD_NAME):
             return '{}{}:{}:{}'.format(FIELD_NAME, 'append', typestr(data), data)
@@ -612,20 +621,20 @@ class CouchableDb(object):
             return data
 
     @_packer(int, long, float, type(None))
-    def _pack_native_keyAsRepr(self, parent_doc, data, attachment_list, name, isKey):
+    def _pack_native_keyAsRepr(self, parent_doc, data, attachment_dict, name, isKey):
         """
         >>> cdb=CouchableDb('testing')
         >>> parent_doc = {}
-        >>> attachment_list = []
+        >>> attachment_dict = {}
         >>> data = 1234
-        >>> cdb._pack_native_keyAsRepr(parent_doc, data, attachment_list, 'myname', False)
+        >>> cdb._pack_native_keyAsRepr(parent_doc, data, attachment_dict, 'myname', False)
         1234
-        >>> cdb._pack_native_keyAsRepr(parent_doc, data, attachment_list, 'myname', True)
+        >>> cdb._pack_native_keyAsRepr(parent_doc, data, attachment_dict, 'myname', True)
         'couchable:repr:int:1234'
         >>> data = 12.34
-        >>> cdb._pack_native_keyAsRepr(parent_doc, data, attachment_list, 'myname', False)
+        >>> cdb._pack_native_keyAsRepr(parent_doc, data, attachment_dict, 'myname', False)
         12.34
-        >>> cdb._pack_native_keyAsRepr(parent_doc, data, attachment_list, 'myname', True)
+        >>> cdb._pack_native_keyAsRepr(parent_doc, data, attachment_dict, 'myname', True)
         'couchable:repr:float:12.34'
         """
         if isKey:
@@ -634,14 +643,14 @@ class CouchableDb(object):
             return data
 
     @_packer(tuple, frozenset, set)
-    def _pack_consargs_keyAsKey(self, parent_doc, data, attachment_list, name, isKey):
+    def _pack_consargs_keyAsKey(self, parent_doc, data, attachment_dict, name, isKey):
         """
         >>> cdb=CouchableDb('testing')
         >>> parent_doc = {}
-        >>> attachment_list = []
+        >>> attachment_dict = {}
 
         >>> data = tuple([1, 2, 3])
-        >>> pprint.pprint(cdb._pack_consargs_keyAsKey(parent_doc, data, attachment_list, 'myname', False))
+        >>> pprint.pprint(cdb._pack_consargs_keyAsKey(parent_doc, data, attachment_dict, 'myname', False))
         {'couchable:':
             {'args': [[1, 2, 3]],
                 'class': 'tuple',
@@ -649,7 +658,7 @@ class CouchableDb(object):
                 'module': '__builtin__'}}
         >>> pprint.pprint(parent_doc)
         {}
-        >>> pprint.pprint(cdb._pack_consargs_keyAsKey(parent_doc, data, attachment_list, 'myname', True))
+        >>> pprint.pprint(cdb._pack_consargs_keyAsKey(parent_doc, data, attachment_dict, 'myname', True))
         'couchable:key:tuple:(1, 2, 3)'
         >>> pprint.pprint(parent_doc)
         {'couchable:': {'keys': {'couchable:key:tuple:(1, 2, 3)': {'couchable:':
@@ -660,7 +669,7 @@ class CouchableDb(object):
 
         >>> parent_doc = {}
         >>> data = frozenset([1, 2, 3])
-        >>> pprint.pprint(cdb._pack_consargs_keyAsKey(parent_doc, data, attachment_list, 'myname', False))
+        >>> pprint.pprint(cdb._pack_consargs_keyAsKey(parent_doc, data, attachment_dict, 'myname', False))
         {'couchable:':
             {'args': [[1, 2, 3]],
                 'class': 'frozenset',
@@ -668,7 +677,7 @@ class CouchableDb(object):
                 'module': '__builtin__'}}
         >>> pprint.pprint(parent_doc)
         {}
-        >>> cdb._pack_consargs_keyAsKey(parent_doc, data, attachment_list, 'myname', True)
+        >>> cdb._pack_consargs_keyAsKey(parent_doc, data, attachment_dict, 'myname', True)
         'couchable:key:frozenset:frozenset([1, 2, 3])'
         >>> pprint.pprint(parent_doc)
         {'couchable:': {'keys': {'couchable:key:frozenset:frozenset([1, 2, 3])': {'couchable:':
@@ -682,25 +691,25 @@ class CouchableDb(object):
 
             parent_doc.setdefault(FIELD_NAME, {})
             parent_doc[FIELD_NAME].setdefault('keys', {})
-            parent_doc[FIELD_NAME]['keys'][key_str] = self._pack_consargs_keyAsKey(parent_doc, data, attachment_list, name, False)
+            parent_doc[FIELD_NAME]['keys'][key_str] = self._pack_consargs_keyAsKey(parent_doc, data, attachment_dict, name, False)
 
             return key_str
         else:
-            return self._objInfo_consargs(data, {}, [self._pack_list_noKey(parent_doc, list(data), attachment_list, name, False)])
+            return self._objInfo_consargs(data, {}, [self._pack_list_noKey(parent_doc, list(data), attachment_dict, name, False)])
 
     @_packer(list)
-    def _pack_list_noKey(self, parent_doc, data, attachment_list, name, isKey):
+    def _pack_list_noKey(self, parent_doc, data, attachment_dict, name, isKey):
         """
         >>> cdb=CouchableDb('testing')
         >>> parent_doc = {}
-        >>> attachment_list = []
+        >>> attachment_dict = {}
 
         >>> data = [1, 2, 3]
-        >>> cdb._pack_list_noKey(parent_doc, data, attachment_list, 'myname', False)
+        >>> cdb._pack_list_noKey(parent_doc, data, attachment_dict, 'myname', False)
         [1, 2, 3]
 
         >>> data = [1, 2, (3, 4, 5)]
-        >>> pprint.pprint(cdb._pack_list_noKey(parent_doc, data, attachment_list, 'myname', False))
+        >>> pprint.pprint(cdb._pack_list_noKey(parent_doc, data, attachment_dict, 'myname', False))
         [1,
          2,
          {'couchable:': {'args': [[3, 4, 5]],
@@ -714,25 +723,25 @@ class CouchableDb(object):
         if type(data) is not list:
             #assert not isObjDict
 
-            return self._pack_object(parent_doc, data, attachment_list, name, isKey)
+            return self._pack_object(parent_doc, data, attachment_dict, name, isKey)
 
-            #return self._objInfo_consargs(data, {}, [self._pack_list_noKey(parent_doc, list(data), attachment_list, name, False)])
+            #return self._objInfo_consargs(data, {}, [self._pack_list_noKey(parent_doc, list(data), attachment_dict, name, False)])
 
-        return [self._pack(parent_doc, x, attachment_list, '{}[{}]'.format(name, i), False) for i, x in enumerate(data)]
+        return [self._pack(parent_doc, x, attachment_dict, '{}[{}]'.format(name, i), False) for i, x in enumerate(data)]
 
     @_packer(dict)
-    def _pack_dict_keyMeansObject(self, parent_doc, data, attachment_list, name, isObjDict):
+    def _pack_dict_keyMeansObject(self, parent_doc, data, attachment_dict, name, isObjDict):
         """
         >>> cdb=CouchableDb('testing')
         >>> parent_doc = {}
-        >>> attachment_list = []
+        >>> attachment_dict = {}
 
         >>> data = {'a': 'b', 'couchable:':'c'}
-        >>> pprint.pprint(cdb._pack_dict_keyMeansObject(parent_doc, data, attachment_list, 'myname', False))
+        >>> pprint.pprint(cdb._pack_dict_keyMeansObject(parent_doc, data, attachment_dict, 'myname', False))
         {'a': 'b', 'couchable:append:str:couchable:': 'c'}
 
         >>> data = {1:1, 2:2, 3:(3, 4, 5)}
-        >>> pprint.pprint(cdb._pack_dict_keyMeansObject(parent_doc, data, attachment_list, 'myname', False))
+        >>> pprint.pprint(cdb._pack_dict_keyMeansObject(parent_doc, data, attachment_dict, 'myname', False))
         {'couchable:repr:int:1': 1,
          'couchable:repr:int:2': 2,
          'couchable:repr:int:3': {'couchable:': {'args': [[3, 4, 5]],
@@ -740,7 +749,7 @@ class CouchableDb(object):
                                             'kwargs': {},
                                             'module': '__builtin__'}}}
         >>> data = {(3, 4, 5):3}
-        >>> pprint.pprint(cdb._pack_dict_keyMeansObject(parent_doc, data, attachment_list, 'myname', False))
+        >>> pprint.pprint(cdb._pack_dict_keyMeansObject(parent_doc, data, attachment_dict, 'myname', False))
         {'couchable:key:tuple:(3, 4, 5)': 3}
         >>> pprint.pprint(parent_doc)
         {'couchable:': {'keys': {'couchable:key:tuple:(3, 4, 5)': {'couchable:':
@@ -753,8 +762,8 @@ class CouchableDb(object):
         if type(data) is not dict:
             assert not isObjDict
 
-            #return self._objInfo_consargs(data, {}, [], self._pack_dict_keyMeansObject(parent_doc, dict(data.items()), attachment_list, name, False))
-            return self._pack_object(parent_doc, data, attachment_list, name, False) # FIXME???
+            #return self._objInfo_consargs(data, {}, [], self._pack_dict_keyMeansObject(parent_doc, dict(data.items()), attachment_dict, name, False))
+            return self._pack_object(parent_doc, data, attachment_dict, name, False) # FIXME???
 
 
         if isObjDict:
@@ -762,8 +771,8 @@ class CouchableDb(object):
         else:
             private_keys = set()
 
-        doc = {self._pack(parent_doc, k, attachment_list, '{}>{}'.format(name, str(k)), True):
-            self._pack(parent_doc, v, attachment_list, '{}.{}'.format(name, str(k)), False)
+        doc = {self._pack(parent_doc, k, attachment_dict, '{}>{}'.format(name, str(k)), True):
+            self._pack(parent_doc, v, attachment_dict, '{}.{}'.format(name, str(k)), False)
             for k,v in data.items() if k not in private_keys and k not in set(['_attachments', '_cdb'])}
 
         #assert '_attachments' not in doc, ', '.join([str(data), str(isObjDict)])
@@ -771,29 +780,39 @@ class CouchableDb(object):
         if private_keys:
             doc.setdefault(FIELD_NAME, {})
             #doc[FIELD_NAME].setdefault('private', {})
-            doc[FIELD_NAME]['private'] = {self._pack(parent_doc, k, attachment_list, '{}>{}'.format(name, str(k)), True):
-                self._pack(parent_doc, v, attachment_list, '{}.{}'.format(name, str(k)), False)
+            doc[FIELD_NAME]['private'] = {self._pack(parent_doc, k, attachment_dict, '{}>{}'.format(name, str(k)), True):
+                self._pack(parent_doc, v, attachment_dict, '{}.{}'.format(name, str(k)), False)
                 for k,v in data.items() if k in private_keys}
             #parent_doc.setdefault(FIELD_NAME, {})
-            #parent_doc[FIELD_NAME]['private'] = {self._pack(parent_doc, k, attachment_list, '{}>{}'.format(name, str(k)), True):
-            #    self._pack(parent_doc, v, attachment_list, '{}.{}'.format(name, str(k)), False)
+            #parent_doc[FIELD_NAME]['private'] = {self._pack(parent_doc, k, attachment_dict, '{}>{}'.format(name, str(k)), True):
+            #    self._pack(parent_doc, v, attachment_dict, '{}.{}'.format(name, str(k)), False)
             #    for k,v in data.items() if k in private_keys}
 
         return doc
 
-    def _pack_attachment(self, parent_doc, data, attachment_list, name, isKey):
+    def _pack_attachment(self, parent_doc, data, attachment_dict, name, isKey):
         cls = type(data)
 
         base_cls, handler_tuple = findHandler(cls, _attachment_handlers)
 
-        if base_cls is None:
-            content = pickle.dumps(data)
-            attachment_list.append((content, name, 'application/octet-stream'))
-            return '{}{}:{}:{}'.format(FIELD_NAME, 'attachment', 'pickle', name)
-        else:
-            content = handler_tuple[0](data)
-            attachment_list.append((content, name, handler_tuple[2]))
-            return '{}{}:{}:{}'.format(FIELD_NAME, 'attachment', typestr(base_cls), name)
+        assert base_cls is not None
+
+        #if base_cls is None:
+        #    content = pickle.dumps(data)
+        #    attachment_dict.append((content, name, 'application/octet-stream'))
+        #    return '{}{}:{}:{}'.format(FIELD_NAME, 'attachment', 'pickle', name)
+        #else:
+
+        content = handler_tuple[0](data)
+        attachment_dict[name] = (content, handler_tuple[2])
+        return '{}{}:{}:{}'.format(FIELD_NAME, 'attachment', typestr(base_cls), name)
+
+    def _pack_pickle(self, parent_doc, data, attachment_dict, name, isKey):
+        attachment_dict.setdefault('pickles', {})
+
+        attachment_dict['pickles'][name] = data
+        return '{}{}:{}'.format(FIELD_NAME, 'pickle', name)
+
 
     def _unpack(self, parent_doc, doc, loaded_dict, inst=None):
         try:
@@ -806,6 +825,13 @@ class CouchableDb(object):
 
                     elif method_str == 'module':
                         return importstr(data)
+
+                    elif method_str == 'pickle':
+                        if 'pickles' not in parent_doc[FIELD_NAME]:
+                            attachment_response = self.db.get_attachment(parent_doc, 'pickles')
+                            parent_doc[FIELD_NAME]['pickles'] = pickle.loads(attachment_response.read())
+
+                        return parent_doc[FIELD_NAME]['pickles'][data]
 
                     type_str, data = data.split(':', 1)
                     if method_str == 'append':
@@ -824,6 +850,7 @@ class CouchableDb(object):
 
                     elif method_str == 'key':
                         return self._unpack(parent_doc, parent_doc[FIELD_NAME]['keys'][doc], loaded_dict)
+
 
                     elif method_str == 'attachment':
                         if type_str == 'pickle':
