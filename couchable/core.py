@@ -214,7 +214,7 @@ class CouchableDb(object):
 
         self.db = db
 
-        self._maxStrLen = 256
+        self._maxStrLen = 1024
 
         self._init_views()
 
