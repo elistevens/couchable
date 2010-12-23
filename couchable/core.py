@@ -162,6 +162,7 @@ def findHandler(cls_or_name, handler_dict):
     else:
         for type_, handler in reversed(handler_dict.items()):
             if isinstance(type_, type) and isinstance(cls_or_name, type) and issubclass(cls_or_name, type_):
+                handler_dict[cls_or_name] = handler
                 return type_, handler
 
     return None, None
@@ -212,6 +213,8 @@ class CouchableDb(object):
                 db = self.server.create(self.name)
 
         self.db = db
+
+        self._maxStrLen = 64
 
         self._init_views()
 
@@ -356,7 +359,7 @@ class CouchableDb(object):
             if success:
                 for content_name, content_tup in attachment_dict.items():
                     if content_name == 'pickles':
-                        content = pickle.dumps(content_tup)
+                        content = doGzip(pickle.dumps(content_tup, pickle.HIGHEST_PROTOCOL))
                         content_type = 'application/octet-stream'
                     else:
                         content, content_type = content_tup
@@ -398,15 +401,17 @@ class CouchableDb(object):
 
             attachment_dict = {}
 
-            # This code matches the code in _pack_object
             doc = {}
-            #doc.update(self._pack_dict_keyMeansObject(doc, obj.__dict__, attachment_dict, '', True))
-            #doc = self._objInfo_doc(obj, doc)
             self._pack_object(doc, obj, attachment_dict, 'self', False, True)
+
+            #if 'pickles' in doc[FIELD_NAME]:
+            #    doc[FIELD_NAME]['pickles'] = pickle.dumps(doc[FIELD_NAME]['pickles'])
 
             self._done_dict[obj._id] = (obj, doc, attachment_dict)
 
             obj._cdb = self
+
+
 
 
     def _pack(self, parent_doc, data, attachment_dict, name, isKey=False):
@@ -611,7 +616,7 @@ class CouchableDb(object):
                 highBytes = True
 
 
-        if highBytes or len(data) > 1024:
+        if highBytes or len(data) > self._maxStrLen:
             #return '{}{}:{}:{}'.format(FIELD_NAME, 'repr', typestr(data), data.encode('hex_codec'))
             return self._pack_pickle(parent_doc, data, attachment_dict, name, isKey)
 
@@ -803,20 +808,18 @@ class CouchableDb(object):
 
         assert base_cls is not None
 
-        #if base_cls is None:
-        #    content = pickle.dumps(data)
-        #    attachment_dict.append((content, name, 'application/octet-stream'))
-        #    return '{}{}:{}:{}'.format(FIELD_NAME, 'attachment', 'pickle', name)
-        #else:
-
         content = handler_tuple[0](data)
         attachment_dict[name] = (content, handler_tuple[2])
         return '{}{}:{}:{}'.format(FIELD_NAME, 'attachment', typestr(base_cls), name)
 
     def _pack_pickle(self, parent_doc, data, attachment_dict, name, isKey):
         attachment_dict.setdefault('pickles', {})
-
         attachment_dict['pickles'][name] = data
+
+        #parent_doc.setdefault(FIELD_NAME, {})
+        #parent_doc[FIELD_NAME].setdefault('pickles', {})
+        #parent_doc[FIELD_NAME]['pickles'][name] = data
+
         return '{}{}:{}'.format(FIELD_NAME, 'pickle', name)
 
 
@@ -835,7 +838,8 @@ class CouchableDb(object):
                     elif method_str == 'pickle':
                         if 'pickles' not in parent_doc[FIELD_NAME]:
                             attachment_response = self.db.get_attachment(parent_doc, 'pickles')
-                            parent_doc[FIELD_NAME]['pickles'] = pickle.loads(attachment_response.read())
+                            parent_doc[FIELD_NAME]['pickles'] = pickle.loads(doGunzip(attachment_response.read()))
+                            #parent_doc[FIELD_NAME]['pickles'] = collections.defaultdict(int)
 
                         return parent_doc[FIELD_NAME]['pickles'][data]
 
@@ -888,7 +892,8 @@ class CouchableDb(object):
             elif isinstance(doc, dict):
                 if FIELD_NAME in doc:
                     info = doc[FIELD_NAME]
-                    #del doc[FIELD_NAME]
+                    #if 'pickles' in info:
+                    #    info['pickles'] = pickle.loads(info['pickles'])
 
                     cls = importstr(info['module'], info['class'])
 
@@ -995,6 +1000,19 @@ class CouchableDb(object):
                 if len(item) > 2:
                     loaded_dict[item['_id']] = item
 
+        # FIXME: pre-stuff the loaded_dict cache here
+        todo_list = []
+        for _id in id_list:
+            if _id not in loaded_dict:
+                todo_list.append(_id)
+        todo_list.sort()
+
+        #print "todo_list:", len(todo_list), todo_list
+
+
+        for row in self.db.view('_all_docs', include_docs=True, keys=todo_list).rows:
+            loaded_dict[row.id] = row.doc
+
         if not isinstance(what, list):
             #print "what", what
             return [self._load(_id, loaded_dict) for _id in id_list][0]
@@ -1020,6 +1038,10 @@ class CouchableDb(object):
         if obj is None or getattr(obj, '_rev', None) != doc['_rev']:
             #print obj is None or getattr(obj, '_id', 'no id'), obj is None or getattr(obj, '_rev', 'no rev'), doc['_rev']
             #print self._obj_by_id.items()
+
+            #if 'pickles' in doc[FIELD_NAME]:
+            #    doc[FIELD_NAME]['pickles'] = pickle.loads(doc[FIELD_NAME]['pickles'])
+
             obj = self._unpack(doc, doc, loaded_dict, obj)
 
         base_cls, func_tuple = findHandler(type(obj), _couchable_types)
@@ -1150,7 +1172,7 @@ def doGzip(data):
     @return: The compressed byte string.
     """
     str_io = cStringIO.StringIO()
-    gz_file = gzip.GzipFile(mode='wb', fileobj=str_io)
+    gz_file = gzip.GzipFile(mode='wb', compresslevel=1, fileobj=str_io)
     gz_file.write(data)
     gz_file.close()
     return str_io.getvalue()
@@ -1170,7 +1192,7 @@ def doGunzip(data):
 
 _attachment_handlers = collections.OrderedDict()
 def registerAttachmentType(type_,
-        serialize_func=(lambda obj: pickle.dumps(obj)),
+        serialize_func=(lambda obj: pickle.dumps(obj, pickle.HIGHEST_PROTOCOL)),
         deserialize_func=(lambda data: pickle.loads(data)),
         content_type='application/octet-stream', gzip=False):
     """
@@ -1225,7 +1247,7 @@ class CouchableAttachment(object):
         @rtype: byte string
         @return: The serialized data.
         """
-        return pickle.dumps(obj)
+        return pickle.dumps(obj, pickle.HIGHEST_PROTOCOL)
 
     @staticmethod
     def unpack(data):
