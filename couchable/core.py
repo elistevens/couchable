@@ -853,19 +853,14 @@ class CouchableDb(object):
 
 
                     elif method_str == 'attachment':
-                        if type_str == 'pickle':
-                            attachment_response = self.db.get_attachment(parent_doc, data)
-                            return pickle.loads(attachment_response.read())
-                        if type_str == '__builtin__.NoneType':
-                            attachment_response = self.db.get_attachment(parent_doc, data)
-                            return pickle.loads(attachment_response.read())
-                        else:
-                            base_cls, handler_tuple = findHandler(type_str, _attachment_handlers)
-                            attachment_response = self.db.get_attachment(parent_doc, data)
-                            return handler_tuple[1](attachment_response.read())
+                        base_cls, handler_tuple = findHandler(type_str, _attachment_handlers)
+                        attachment_response = self.db.get_attachment(parent_doc, data)
+                        return handler_tuple[1](attachment_response.read())
 
                     elif method_str == 'custom':
                         base_cls, unpack_func = findHandler(type_str, _unpack_handlers)
+
+                        assert unpack_func is not None, "Custom unpacker not found for {} (make sure that the modules where the custom packers are defined get imported first)".format(type_str)
                         #attachment_response = self.db.get_attachment(parent_doc, data)
                         #return handler_tuple[1](attachment_response.read())
 
