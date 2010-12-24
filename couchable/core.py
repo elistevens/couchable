@@ -159,10 +159,12 @@ def findHandler(cls_or_name, handler_dict):
     #el
     if cls_or_name in handler_dict:
         return cls_or_name, handler_dict[cls_or_name]
-    else:
+    if (cls_or_name,) in handler_dict:
+        return handler_dict[(cls_or_name,)]
+    elif isinstance(cls_or_name, type):
         for type_, handler in reversed(handler_dict.items()):
-            if isinstance(type_, type) and isinstance(cls_or_name, type) and issubclass(cls_or_name, type_):
-                handler_dict[cls_or_name] = handler
+            if isinstance(type_, type) and issubclass(cls_or_name, type_):
+                handler_dict[(cls_or_name,)] = type_, handler
                 return type_, handler
 
     return None, None
