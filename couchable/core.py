@@ -21,7 +21,6 @@
 
 """
 foo
-bar
 """
 
 import collections
