@@ -122,9 +122,11 @@ def _packer(*args):
 
 def custom_packer(type_, pack_func, unpack_func, simple=True):
     if simple:
+        _ret_func = lambda data: '{}{}:{}:{}'.format(FIELD_NAME, 'custom', typestr(data), pack_func(data))
         _pack_func = lambda self, parent_doc, data, attachment_dict, name, isKey: '{}{}:{}:{}'.format(FIELD_NAME, 'custom', typestr(data), pack_func(data))
         _unpack_func = lambda s: unpack_func(s)
     else:
+        _ret_func = pack_func
         _pack_func = pack_func
         _unpack_func = unpack_func
 
@@ -133,6 +135,8 @@ def custom_packer(type_, pack_func, unpack_func, simple=True):
 
     _unpack_handlers[type_] = _unpack_func
     _unpack_handlers[typestr(type_)] = _unpack_func
+
+    return _ret_func, _unpack_func
 
 
 # function for navigating the above dics of handlers, etc.
@@ -1164,7 +1168,7 @@ def newid(obj, id_func=None, noUuid=False, noType=False, sep=':'):
         obj._id = sep.join(id_list).lstrip('_')
 
 # Attachments
-def doGzip(data):
+def doGzip(data, compresslevel=1):
     """
     Helper function for compressing byte strings.
 
@@ -1196,7 +1200,7 @@ _attachment_handlers = collections.OrderedDict()
 def registerAttachmentType(type_,
         serialize_func=(lambda obj: pickle.dumps(obj, pickle.HIGHEST_PROTOCOL)),
         deserialize_func=(lambda data: pickle.loads(data)),
-        content_type='application/octet-stream', gzip=False):
+        content_type='application/octet-stream', gzip=True):
     """
     @type  type_: type
     @param type_: Instances of this type will be stored as attachments instead of CouchDB documents.
