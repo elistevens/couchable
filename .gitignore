@@ -1,8 +1,40 @@
+# compiled python
 *.pyc
+# optimized python
 *.pyo
-*_.so
-*_.c
+# python .dll-ish stuff
+*.pyd
+
+# cython cruft
+*_c.so
+*_c.c
+*_c.html
+
+# setuptools cruft
 build
 dist
 *.egg-info
+
+# komodo project files (local only)
+*.kpf
+*.komodoproject
+
+# tmp dirs for holding data files and other junk
+tmp
+junk
+*.delme
+
+# Temporary, externally sourced
+couchable
+solari*
+
+# For testing solari
+selenium*.jar
+
+# vim tempfiles
+.*.swp
+
+# test data
 .coverage
+mms/common/storage/data
+gamma_data.csv

@@ -18,6 +18,11 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
+# logging
+import logging
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+
 
 """
 foo
@@ -40,6 +45,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 import uuid
 import weakref
 
@@ -424,7 +430,12 @@ class CouchableDb(object):
 
         base_cls, handler = findHandler(cls, _pack_handlers)
 
-        return handler(self, parent_doc, data, attachment_dict, name, isKey)
+        try:
+            #print "Calling _pack: {}".format((data, attachment_dict, name))
+            #print ''.join(traceback.format_stack())
+            return handler(self, parent_doc, data, attachment_dict, name, isKey)
+        except RuntimeError:
+            log.error(name)
         #if handler:
         #    try:
         #        return handler(self, parent_doc, data, attachment_dict, name, isKey)
@@ -774,9 +785,19 @@ class CouchableDb(object):
                 'kwargs': {},
                 'module': '__builtin__'}}}}}
         """
-        # FIXME: ...
+        if type(data) is collections.OrderedDict:
+            assert not isObjDict, "{}: {}".format(name, str(type(data)))
+
+            doc = self._pack_dict_keyMeansObject(parent_doc, dict(data.items()), attachment_dict, name, False)
+            self._objInfo_consargs(data, doc, args=[[list(x) for x in data.items()]])
+            #
+            #self._objInfo_doc(data, doc)
+            #doc[FIELD_NAME]['keyOrder'] = list(data.keys())
+
+            return doc
+
         if type(data) is not dict:
-            assert not isObjDict
+            assert not isObjDict, "{}: {}".format(name, str(type(data)))
 
             #return self._objInfo_consargs(data, {}, [], self._pack_dict_keyMeansObject(parent_doc, dict(data.items()), attachment_dict, name, False))
             return self._pack_object(parent_doc, data, attachment_dict, name, False) # FIXME???
@@ -784,11 +805,13 @@ class CouchableDb(object):
 
         if isObjDict:
             private_keys = {k for k in data.keys() if k.startswith('_') and k not in ('_id', '_rev', '_attachments', '_cdb')}
+            nameFormat_str = '{}.{}'
         else:
             private_keys = set()
+            nameFormat_str = '{}[{}]'
 
         doc = {self._pack(parent_doc, k, attachment_dict, '{}>{}'.format(name, str(k)), True):
-            self._pack(parent_doc, v, attachment_dict, '{}.{}'.format(name, str(k)), False)
+            self._pack(parent_doc, v, attachment_dict, nameFormat_str.format(name, str(k)), False)
             for k,v in data.items() if k not in private_keys and k not in set(['_attachments', '_cdb'])}
 
         #assert '_attachments' not in doc, ', '.join([str(data), str(isObjDict)])
@@ -817,6 +840,7 @@ class CouchableDb(object):
         attachment_dict[name] = (content, handler_tuple[2])
         return '{}{}:{}:{}'.format(FIELD_NAME, 'attachment', typestr(base_cls), name)
 
+    @_packer(type)
     def _pack_pickle(self, parent_doc, data, attachment_dict, name, isKey):
         attachment_dict.setdefault('pickles', {})
         attachment_dict['pickles'][name] = data

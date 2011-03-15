@@ -357,5 +357,7 @@ types:
 
 - Tuple subclasses that override __new__ that *don't* do so in a way that is
 compatible with collections.namedtuple.
+- Programmatically defined classes that are not importable (they're basically
+impossible to reconstruct during loading).
 
 This list may not be exhaustive; unknown limitations may exist.

@@ -35,6 +35,8 @@ import unittest
 # 3rd party packages
 import couchdb
 
+from nose.plugins.attrib import attr
+
 # in-house
 import couchable
 import couchable.core
@@ -147,11 +149,13 @@ class TestCouchable(unittest.TestCase):
         del self.simple_dict
 
     #@unittest.skip('''Playing with ouput''')
+    @attr('couchable')
     def test_docs(self):
         # doctest returns a tuple of (failed, attempted)
         self.assertEqual(doctest.testmod(couchable.core,
                 optionflags=(doctest.REPORT_CDIFF | doctest.NORMALIZE_WHITESPACE | doctest.ELLIPSIS))[0], 0)
 
+    @attr('couchable')
     def test_2_baseTypeSubclasses_1(self):
         obj = Simple(d=DictSubclass(a=1, b=2), l=ListSubclass([1,2,3]))
 
@@ -165,6 +169,7 @@ class TestCouchable(unittest.TestCase):
         self.assertEqual(type(obj.d), DictSubclass)
         self.assertEqual(type(obj.l), ListSubclass)
 
+    @attr('couchable')
     def test_2_baseTypeSubclasses_2(self):
         obj = DictSubclass(d=DictSubclass(a=1, b=2), l=ListSubclass([DictSubclass(e=5, f=6),1,2,3]))
         obj.x = 4
@@ -190,6 +195,7 @@ class TestCouchable(unittest.TestCase):
         self.assertEqual(type(list.__getitem__(l, 0)), DictSubclass)
         #assert False
 
+    @attr('couchable')
     def test_2_binaryStrings_1(self):
         s = 'abc\xaa\xbb\xcc this is the tricky part: \\xddd'
         obj = Simple(s=s)
@@ -203,6 +209,7 @@ class TestCouchable(unittest.TestCase):
 
         self.assertEquals(obj.s, s)
 
+    @attr('couchable')
     def test_2_binaryStrings_2(self):
         #s = 'abc\xaa\xbb\xcc this is the tricky part: \\xddd'
         s = ''.join([chr(x) for x in range(256)])
@@ -217,6 +224,7 @@ class TestCouchable(unittest.TestCase):
 
         self.assertEquals(obj.s, s)
 
+    @attr('couchable')
     def test_2_binaryStrings_3(self):
         #s = 'abc\xaa\xbb\xcc this is the tricky part: \\xddd'
         s = ''.join([chr(x) for x in range(127)])
@@ -231,6 +239,7 @@ class TestCouchable(unittest.TestCase):
 
         self.assertEquals(obj.s, s)
 
+    @attr('couchable')
     def test_2_nullStrings(self):
         s = '\x00abc\xaa\xbb\xcc this is the tricky part: \\xddd'
         obj = Simple(s=s)
@@ -245,6 +254,7 @@ class TestCouchable(unittest.TestCase):
         self.assertEquals(obj.s, s)
 
 
+    @attr('couchable')
     def test_1_simple(self):
         obj = Simple(**self.simple_dict)
 
@@ -259,6 +269,7 @@ class TestCouchable(unittest.TestCase):
         for key, value in self.simple_dict.items():
             self.assertEqual(getattr(obj, key), value)
 
+    @attr('couchable')
     def test_3_namedtuple(self):
         obj = Simple(abc=NamedTupleABC(1,2,3), ts=TupleSubclass([1,2,3,4,5]))
 
@@ -275,8 +286,49 @@ class TestCouchable(unittest.TestCase):
         self.assertEqual(type(obj.ts), TupleSubclass)
         self.assertEqual(obj.ts[3], 4)
 
+    @attr('couchable', 'elis')
+    def test_31_odict(self):
+        limit = sys.getrecursionlimit()
+        try:
+            sys.setrecursionlimit(100)
 
 
+            kv_list = [(chr(ord('a') + i), i) for i in range(10)]
+            od = collections.OrderedDict()
+            for k,v in kv_list:
+                od[k] = v
+
+            obj = Simple(od=od)
+
+            _id = self.cdb.store(obj)
+
+            del obj
+            self.assertFalse(self.cdb._obj_by_id)
+
+            obj = self.cdb.load(_id)
+
+            self.assertEqual(type(obj.od), collections.OrderedDict)
+            self.assertEqual(list(obj.od.items()), kv_list)
+
+        finally:
+            sys.setrecursionlimit(limit)
+
+    @attr('couchable', 'elis')
+    def test_32_types(self):
+        obj = Simple(int=int)
+
+        _id = self.cdb.store(obj)
+
+        del obj
+        self.assertFalse(self.cdb._obj_by_id)
+
+        obj = self.cdb.load(_id)
+
+        self.assertEqual(type(obj.int), type)
+        self.assertEqual(obj.int, int)
+
+
+    @attr('couchable')
     def test_nonStrKeys(self):
         d = {1234:'ints', (1,2,3,4):'tuples', frozenset([1,1,2,2,3,3]): 'frozenset', None: 'none', SimpleKey(this_is_a_key=True):'truth'}
 
@@ -296,6 +348,7 @@ class TestCouchable(unittest.TestCase):
             self.assertEqual(obj.d[key], value)
 
 
+    @attr('couchable')
     def test_private(self):
         a = SimpleDoc(name='AAA', _implementationDetail='foo', b=Simple(_morePrivate='bbb'), _inst=Simple(i='j'))
 
@@ -314,6 +367,7 @@ class TestCouchable(unittest.TestCase):
 
         a_id = self.cdb.store(a)
 
+    @attr('couchable')
     def test_couchablePrefix(self):
         obj = Simple(s='couchable:foo', u=u'couchable:bar')
 
@@ -327,6 +381,7 @@ class TestCouchable(unittest.TestCase):
         self.assertEqual(obj.s, 'couchable:foo')
         self.assertEqual(obj.u, u'couchable:bar')
 
+    @attr('couchable')
     def test_moduleStorage(self):
         import os.path
 
@@ -343,6 +398,7 @@ class TestCouchable(unittest.TestCase):
 
 
 
+    @attr('couchable')
     def test_multidoc(self):
         a = SimpleDoc(name='AAA', s=Simple(sss='SSS'))
         b = SimpleDoc(name='BBB', a=a)
@@ -359,6 +415,7 @@ class TestCouchable(unittest.TestCase):
 
         self.assertIs(b.a, c.a)
 
+    @attr('couchable')
     def test_viewLoading3(self):
         a = SimpleDoc(name='AAA', s=Simple(sss='SSS'))
         b = SimpleDoc(name='BBB', a=a)
@@ -386,6 +443,7 @@ class TestCouchable(unittest.TestCase):
         self.assertEqual(a.s.sss, 'SSS')
         self.assertIs(a, b.a)
 
+    @attr('couchable')
     def test_viewLoading2(self):
         a = SimpleDoc(name='AAA', s=Simple(sss='SSS'))
         b = SimpleDoc(name='BBB', a=a)
@@ -413,6 +471,7 @@ class TestCouchable(unittest.TestCase):
 
 
 
+    @attr('slow', 'couchable')
     def test_simpleAttachments(self):
         b = SimpleDoc(name='BBB', attach=SimpleAttachment(b=1, bb=2))
         c = SimpleDoc(name='CCC', attach=SimpleAttachment(c=1, cc=2), bb=b)
@@ -456,6 +515,7 @@ class TestCouchable(unittest.TestCase):
         self.assertTrue(a.regex.match('abcd'))
         self.assertEqual(a.regex.match('1234'), None)
 
+    @attr('slow', 'couchable')
     def test_aftermarketAttachments(self):
         b = AftermarketDoc(name='BBB', attach=AftermarketAttachment(b=1, bb=2))
         c = AftermarketDoc(name='CCC', attach=AftermarketAttachment(c=1, cc=2), bb=b)
@@ -499,6 +559,7 @@ class TestCouchable(unittest.TestCase):
         self.assertTrue(a.regex.match('abcd'))
         self.assertEqual(a.regex.match('1234'), None)
 
+    @attr('couchable')
     def test_docCycles(self):
         limit = sys.getrecursionlimit()
         try:
@@ -532,9 +593,11 @@ class TestCouchable(unittest.TestCase):
             sys.setrecursionlimit(limit)
 
     @unittest.expectedFailure
+    @attr('slow', 'couchable')
     def test_uncouchable(self):
         self.cdb.store(self.cdb)
 
+    @attr('couchable')
     def test_cdbCopy(self):
         obj = Simple(**self.simple_dict)
 
@@ -551,6 +614,7 @@ class TestCouchable(unittest.TestCase):
 
 
     @unittest.skip("""This fails intermittently.  I suspect a problem with the base couchdb library, but I can't pin it down yet.""")
+    @attr('couchable')
     def test_wait(self):
         a = SimpleDoc(name='AAA')
         a_id = self.cdb.store(a)
@@ -562,16 +626,20 @@ class TestCouchable(unittest.TestCase):
 
 
     @unittest.skip("""still implementing tests for this feature...""")
+    @attr('couchable')
     def test_aftermarket(self):
         pass
 
     @unittest.skip("""still implementing tests for this feature...""")
+    @attr('couchable')
     def test_loadFromView(self):
         pass
 
 
 
-    @unittest.skip("""cycles don't work ATM""")
+    #@unittest.skip("""cycles don't work ATM""")
+    @unittest.expectedFailure
+    @attr('couchable')
     def test_cycles(self):
         limit = sys.getrecursionlimit()
         try:
