@@ -234,7 +234,7 @@ class CouchableDb(object):
             function(doc) {
                 if ('couchable:' in doc) {
                     var info = doc['couchable:'];
-                    emit([info.module, info.class, doc._id], doc);
+                    emit([info.module, info.class, doc._id], null);
                 }
             }'''
 
@@ -436,6 +436,10 @@ class CouchableDb(object):
             return handler(self, parent_doc, data, attachment_dict, name, isKey)
         except RuntimeError:
             log.error(name)
+        except Exception, e:
+            log.error(name)
+            raise
+            
         #if handler:
         #    try:
         #        return handler(self, parent_doc, data, attachment_dict, name, isKey)
@@ -1296,5 +1300,11 @@ registerAttachmentType(CouchableAttachment,
         lambda obj: CouchableAttachment.pack(obj),
         lambda data: CouchableAttachment.unpack(data),
         'application/octet-stream')
+
+
+def registerPickleType(type_):
+    _pack_handlers[type_] = CouchableDb._pack_pickle
+    _pack_handlers[typestr(type_)] = CouchableDb._pack_pickle
+
 
 # eof

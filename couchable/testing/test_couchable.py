@@ -286,7 +286,7 @@ class TestCouchable(unittest.TestCase):
         self.assertEqual(type(obj.ts), TupleSubclass)
         self.assertEqual(obj.ts[3], 4)
 
-    @attr('couchable', 'elis')
+    @attr('couchable')
     def test_31_odict(self):
         limit = sys.getrecursionlimit()
         try:
@@ -313,7 +313,7 @@ class TestCouchable(unittest.TestCase):
         finally:
             sys.setrecursionlimit(limit)
 
-    @attr('couchable', 'elis')
+    @attr('couchable')
     def test_32_types(self):
         obj = Simple(int=int)
 
@@ -326,6 +326,25 @@ class TestCouchable(unittest.TestCase):
 
         self.assertEqual(type(obj.int), type)
         self.assertEqual(obj.int, int)
+
+
+    @attr('couchable', 'elis')
+    def test_40_external_edits(self):
+        obj = Simple(i=1)
+        _id = self.cdb.store(obj)
+        
+        doc = self.cdb.db.get(_id)
+        doc['i'] = 2
+        self.cdb.db.save(doc)
+
+        self.assertEqual(obj.i, 1)
+
+        obj = self.cdb.load(_id)
+        self.assertEqual(obj.i, 2)
+        
+        #assert False
+        
+        
 
 
     @attr('couchable')
