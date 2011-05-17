@@ -263,7 +263,7 @@ class CouchableDb(object):
         @type  cls: type
         @param cls: The class of objects that the view should be restricted to.  Note that sub/superclasses are not considered.
         @type  name: string
-        @param name: The string to suffix the name of the view with (byclass:module.class:name).
+        @param name: The string to suffix the name of the view with (byclass+module.class:name).
         @type  keys: list of strings
         @param keys: A list of unescaped javascript expressions to use as the key for the view.
         @type  multikeys: list of list of strings
@@ -273,7 +273,7 @@ class CouchableDb(object):
         @type  reduce: string
         @param reduce: A CouchDB reduce function.  Can be None, javascript, or the built-in '_sum' kind of reduce function.
         @rtype: str
-        @return: The full name of the view (byclass:module.class:name).
+        @return: The full name of the view (byclass+module.class+name).
         """
         multikeys = multikeys or [keys]
         emit_js = '\n'.join(['''emit([{}], {});'''.format(', '.join([('info.private.' + key if key[0] == '_' else 'doc.' + key) for key in keys]), value) for keys in multikeys])
@@ -290,7 +290,7 @@ class CouchableDb(object):
 
         byclass_js = string.Template(byclass_js).safe_substitute(module=cls.__module__, cls=cls.__name__, emit=emit_js, value=value)
 
-        fullName = 'byclass:{}.{}:{}'.format(cls.__module__, cls.__name__, name)
+        fullName = 'byclass-{}-{}--{}'.format(cls.__module__, cls.__name__, name)
         couchdb.design.ViewDefinition('couchable', fullName, byclass_js, reduce).sync(self.db)
 
         return fullName
@@ -567,9 +567,13 @@ class CouchableDb(object):
             doc = parent_doc
         else:
             doc = {}
+            
+        self._objInfo_doc(data, doc)
+        update_dict = self._pack_dict_keyMeansObject(parent_doc, data.__dict__, attachment_dict, name, True, topLevel)
+        
+        assert set(doc).intersection(set(update_dict)) == set(), repr(set(doc).intersection(set(update_dict)))
 
-        doc.update(self._pack_dict_keyMeansObject(parent_doc, data.__dict__, attachment_dict, name, True))
-        doc = self._objInfo_doc(data, doc)
+        doc.update(update_dict)
 
         if isinstance(data, dict) and type(data) is not dict:
             doc[FIELD_NAME]['dict'] = self._pack_dict_keyMeansObject(parent_doc, dict(dict.items(data)), attachment_dict, name, False)
@@ -713,7 +717,7 @@ class CouchableDb(object):
         """
         if isKey:
             key_str = '{}{}:{}:{!r}'.format(FIELD_NAME, 'key', typestr(data), data)
-
+            
             parent_doc.setdefault(FIELD_NAME, {})
             parent_doc[FIELD_NAME].setdefault('keys', {})
             parent_doc[FIELD_NAME]['keys'][key_str] = self._pack_consargs_keyAsKey(parent_doc, data, attachment_dict, name, False)
@@ -761,7 +765,7 @@ class CouchableDb(object):
         return [self._pack(parent_doc, x, attachment_dict, '{}[{}]'.format(name, i), False) for i, x in enumerate(data)]
 
     @_packer(dict)
-    def _pack_dict_keyMeansObject(self, parent_doc, data, attachment_dict, name, isObjDict):
+    def _pack_dict_keyMeansObject(self, parent_doc, data, attachment_dict, name, isObjDict, topLevel=False):
         """
         >>> cdb=CouchableDb('testing')
         >>> parent_doc = {}
@@ -808,11 +812,14 @@ class CouchableDb(object):
 
 
         if isObjDict:
-            private_keys = {k for k in data.keys() if k.startswith('_') and k not in ('_id', '_rev', '_attachments', '_cdb')}
             nameFormat_str = '{}.{}'
         else:
-            private_keys = set()
             nameFormat_str = '{}[{}]'
+
+        if topLevel:
+            private_keys = {k for k in data.keys() if k.startswith('_') and k not in ('_id', '_rev', '_attachments', '_cdb')}
+        else:
+            private_keys = set()
 
         doc = {self._pack(parent_doc, k, attachment_dict, '{}>{}'.format(name, str(k)), True):
             self._pack(parent_doc, v, attachment_dict, nameFormat_str.format(name, str(k)), False)
@@ -821,11 +828,17 @@ class CouchableDb(object):
         #assert '_attachments' not in doc, ', '.join([str(data), str(isObjDict)])
 
         if private_keys:
-            doc.setdefault(FIELD_NAME, {})
+            if topLevel:
+                private_doc = parent_doc
+            else:
+                private_doc = doc
+                
+            private_doc.setdefault(FIELD_NAME, {})
             #doc[FIELD_NAME].setdefault('private', {})
-            doc[FIELD_NAME]['private'] = {self._pack(parent_doc, k, attachment_dict, '{}>{}'.format(name, str(k)), True):
-                self._pack(parent_doc, v, attachment_dict, '{}.{}'.format(name, str(k)), False)
-                for k,v in data.items() if k in private_keys}
+            private_doc[FIELD_NAME]['private'] = {
+                    self._pack(parent_doc, k, attachment_dict, '{}>{}'.format(name, str(k)), True):
+                    self._pack(parent_doc, v, attachment_dict, '{}.{}'.format(name, str(k)), False)
+                    for k,v in data.items() if k in private_keys}
             #parent_doc.setdefault(FIELD_NAME, {})
             #parent_doc[FIELD_NAME]['private'] = {self._pack(parent_doc, k, attachment_dict, '{}>{}'.format(name, str(k)), True):
             #    self._pack(parent_doc, v, attachment_dict, '{}.{}'.format(name, str(k)), False)

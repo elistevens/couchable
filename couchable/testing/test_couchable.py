@@ -68,6 +68,12 @@ class SimpleKey(Simple):
     def __hash__(self):
         return hash(frozenset(self.__dict__.keys()))
 
+
+class SimplePickle(Simple):
+    pass
+
+couchable.registerPickleType(SimplePickle)
+
 class SimpleDoc(couchable.CouchableDoc):
     def __init__(self, **kwargs):
         for name, value in kwargs.items():
@@ -328,7 +334,7 @@ class TestCouchable(unittest.TestCase):
         self.assertEqual(obj.int, int)
 
 
-    @attr('couchable', 'elis')
+    @attr('couchable')
     def test_40_external_edits(self):
         obj = Simple(i=1)
         _id = self.cdb.store(obj)
@@ -345,6 +351,63 @@ class TestCouchable(unittest.TestCase):
         #assert False
         
         
+    @attr('couchable', 'elis')
+    def test_40_nested_docs_with_tuples(self):
+        nt = NamedTupleABC(1,2,3)
+        
+        targetobj = Simple(aaa=nt, target={nt: 'bbb'}, zzz=nt, _foo=1)
+        obj = Simple(sub={nt: targetobj}, abc2={nt: 'abc2'}, _foo=1)
+        
+        #subobj.o = obj
+
+        self.cdb.store(targetobj)
+        _id = self.cdb.store(obj)
+        
+        
+        target_id = targetobj._id
+
+        del obj
+        del targetobj
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id)
+
+        #obj = self.cdb.load(_id)
+        
+        doc = self.cdb.db[target_id]
+        
+        self.assertIn('keys', doc['couchable:'])
+        
+        #self.assertEqual(type(obj.sub.abc), NamedTupleABC)
+        #self.assertEqual(obj.sub.abc.a, 1)
+        #
+        #self.assertEqual(type(obj.sub.ts), TupleSubclass)
+        #self.assertEqual(obj.sub.ts[3], 4)
+        
+        #assert False
+
+
+    @attr('couchable', 'elis')
+    def test_40_pickles(self):
+        pk = SimplePickle(a=1, b=2, c=3)
+        
+        obj = Simple(d={'pk': pk})
+        
+        _id = self.cdb.store(obj)
+
+        del obj
+        del pk
+        gc.collect()
+
+        #for v in self.cdb._obj_by_id.values():
+        #    print v
+        #    print gc.get_referrers(v)
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
+        obj = self.cdb.load(_id)
+        
+        self.assertEqual(obj.d['pk'].a, 1)
+        
+        #assert False
 
 
     @attr('couchable')
