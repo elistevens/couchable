@@ -27,7 +27,7 @@ log.setLevel(logging.DEBUG)
 """
 foo
 """
-
+import base64
 import collections
 import copy
 import cPickle as pickle
@@ -39,6 +39,7 @@ import inspect
 import itertools
 import os
 import pprint
+import random
 import re
 import string
 import subprocess
@@ -347,6 +348,23 @@ class CouchableDb(object):
 
         for obj in store_list:
             self._store(obj)
+            
+        for (obj, doc, attachment_dict) in self._done_dict.values():
+            doc['_attachments'] = {}
+
+            for content_name, content_tup in list(attachment_dict.items()):
+                if content_name == 'pickles':
+                    content = doGzip(pickle.dumps(content_tup, pickle.HIGHEST_PROTOCOL))
+                    content_type = 'application/pickle'
+                else:
+                    content, content_type = content_tup
+                    
+                if len(content) <= 1024:
+                    doc['_attachments'][content_name] = {'content_type': content_type, 'data': base64.b64encode(content)}
+                    del attachment_dict[content_name]
+                
+            
+            
 
         # Actually (finally) send the data to couchdb.
         ret_list = self.db.update([x[1] for x in self._done_dict.values()])
@@ -364,9 +382,9 @@ class CouchableDb(object):
         #    raise
 
 
-        for ret, store_tuple in itertools.izip(ret_list, self._done_dict.values()):
-            success, _id, _rev = ret
-            obj, doc, attachment_dict = store_tuple
+        for (success, _id, _rev), (obj, doc, attachment_dict) in itertools.izip(ret_list, self._done_dict.values()):
+            #success, _id, _rev = ret
+            #obj, doc, attachment_dict = store_tuple
             if success:
                 for content_name, content_tup in attachment_dict.items():
                     if content_name == 'pickles':
@@ -852,6 +870,7 @@ class CouchableDb(object):
         base_cls, handler_tuple = findHandler(cls, _attachment_handlers)
 
         assert base_cls is not None
+        assert name not in attachment_dict
 
         content = handler_tuple[0](data)
         attachment_dict[name] = (content, handler_tuple[2])
@@ -860,6 +879,9 @@ class CouchableDb(object):
     @_packer(type)
     def _pack_pickle(self, parent_doc, data, attachment_dict, name, isKey):
         attachment_dict.setdefault('pickles', {})
+        
+        assert name not in attachment_dict['pickles']
+        
         attachment_dict['pickles'][name] = data
 
         #parent_doc.setdefault(FIELD_NAME, {})
