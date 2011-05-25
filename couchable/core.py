@@ -359,7 +359,7 @@ class CouchableDb(object):
                 else:
                     content, content_type = content_tup
                     
-                if len(content) <= 1024:
+                if len(content) <= self._maxStrLen * 2:
                     doc['_attachments'][content_name] = {'content_type': content_type, 'data': base64.b64encode(content)}
                     del attachment_dict[content_name]
                 
@@ -845,15 +845,12 @@ class CouchableDb(object):
 
         #assert '_attachments' not in doc, ', '.join([str(data), str(isObjDict)])
 
-        if private_keys:
-            if topLevel:
-                private_doc = parent_doc
-            else:
-                private_doc = doc
+        if topLevel and private_keys:
+            private_doc = parent_doc
                 
-            private_doc.setdefault(FIELD_NAME, {})
+            parent_doc.setdefault(FIELD_NAME, {})
             #doc[FIELD_NAME].setdefault('private', {})
-            private_doc[FIELD_NAME]['private'] = {
+            parent_doc[FIELD_NAME]['private'] = {
                     self._pack(parent_doc, k, attachment_dict, '{}>{}'.format(name, str(k)), True):
                     self._pack(parent_doc, v, attachment_dict, '{}.{}'.format(name, str(k)), False)
                     for k,v in data.items() if k in private_keys}
@@ -1341,5 +1338,10 @@ def registerPickleType(type_):
     _pack_handlers[type_] = CouchableDb._pack_pickle
     _pack_handlers[typestr(type_)] = CouchableDb._pack_pickle
 
+def registerNoneType(type_):
+    handler = lambda self, parent_doc, data, attachment_dict, name, isKey: CouchableDb._pack_native_keyAsRepr(self, parent_doc, None, attachment_dict, name, isKey)
+
+    _pack_handlers[type_] = handler
+    _pack_handlers[typestr(type_)] = handler
 
 # eof
