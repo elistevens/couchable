@@ -60,6 +60,9 @@ class Simple(object):
     def __init__(self, **kwargs):
         for name, value in kwargs.items():
             setattr(self, name, value)
+            
+    def __repr__(self):
+        return repr(self.__dict__)
 
 class SimpleKey(Simple):
     def __eq__(self, other):
@@ -90,7 +93,7 @@ class AftermarketDoc(object):
             setattr(self, name, value)
 
 couchable.registerDocType(AftermarketDoc,
-        lambda obj, cdb: couchable.newid(obj, lambda x: str(sorted(x.__dict__.keys()))),
+        lambda obj, cdb: couchable.newid(obj, lambda x: '-'.join(sorted(x.__dict__.keys()))),
         lambda obj, cdb: None)
 
 class AftermarketAttachment(object):
@@ -168,7 +171,9 @@ class TestCouchable(unittest.TestCase):
         _id = self.cdb.store(obj)
 
         del obj
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
 
         obj = self.cdb.load(_id)
 
@@ -183,7 +188,9 @@ class TestCouchable(unittest.TestCase):
         _id = self.cdb.store(obj)
 
         del obj
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
 
         obj = self.cdb.load(_id)
 
@@ -209,7 +216,9 @@ class TestCouchable(unittest.TestCase):
         _id = self.cdb.store(obj)
 
         del obj
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
 
         obj = self.cdb.load(_id)
 
@@ -224,7 +233,9 @@ class TestCouchable(unittest.TestCase):
         _id = self.cdb.store(obj)
 
         del obj
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
 
         obj = self.cdb.load(_id)
 
@@ -239,7 +250,9 @@ class TestCouchable(unittest.TestCase):
         _id = self.cdb.store(obj)
 
         del obj
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
 
         obj = self.cdb.load(_id)
 
@@ -253,7 +266,9 @@ class TestCouchable(unittest.TestCase):
         _id = self.cdb.store(obj)
 
         del obj
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
 
         obj = self.cdb.load(_id)
 
@@ -267,7 +282,9 @@ class TestCouchable(unittest.TestCase):
         _id = self.cdb.store(obj)
 
         del obj
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
 
         obj = self.cdb.load(_id)
 
@@ -282,7 +299,9 @@ class TestCouchable(unittest.TestCase):
         _id = self.cdb.store(obj)
 
         del obj
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
 
         obj = self.cdb.load(_id)
 
@@ -309,7 +328,8 @@ class TestCouchable(unittest.TestCase):
             _id = self.cdb.store(obj)
 
             del obj
-            self.assertFalse(self.cdb._obj_by_id)
+            gc.collect()
+            self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
 
             obj = self.cdb.load(_id)
 
@@ -319,14 +339,15 @@ class TestCouchable(unittest.TestCase):
         finally:
             sys.setrecursionlimit(limit)
 
-    @attr('couchable')
+    @attr('couchable', 'elis')
     def test_32_types(self):
         obj = Simple(int=int)
 
         _id = self.cdb.store(obj)
 
         del obj
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
 
         obj = self.cdb.load(_id)
 
@@ -369,7 +390,7 @@ class TestCouchable(unittest.TestCase):
         del obj
         del targetobj
         gc.collect()
-        self.assertFalse(self.cdb._obj_by_id)
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
 
         #obj = self.cdb.load(_id)
         
@@ -410,7 +431,7 @@ class TestCouchable(unittest.TestCase):
         #assert False
 
 
-    @attr('couchable')
+    @attr('couchable', 'elis')
     def test_nonStrKeys(self):
         d = {1234:'ints', (1,2,3,4):'tuples', frozenset([1,1,2,2,3,3]): 'frozenset', None: 'none', SimpleKey(this_is_a_key=True):'truth'}
 
@@ -419,7 +440,9 @@ class TestCouchable(unittest.TestCase):
         _id = self.cdb.store(obj)
 
         del obj
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
 
         obj = self.cdb.load(_id)
 
@@ -437,7 +460,8 @@ class TestCouchable(unittest.TestCase):
         a_id = self.cdb.store(a)
 
         del a
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
 
         a = self.cdb.load(a_id)
 
@@ -456,7 +480,9 @@ class TestCouchable(unittest.TestCase):
         _id = self.cdb.store(obj)
 
         del obj
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
 
         obj = self.cdb.load(_id)
 
@@ -472,7 +498,9 @@ class TestCouchable(unittest.TestCase):
         _id = self.cdb.store(obj)
 
         del obj
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
 
         obj = self.cdb.load(_id)
 
@@ -491,7 +519,8 @@ class TestCouchable(unittest.TestCase):
         del a
         del b
         del c
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
 
         b, c = self.cdb.load(id_list)
 
@@ -508,7 +537,8 @@ class TestCouchable(unittest.TestCase):
         del a
         del b
         del c
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
 
         fullName = self.cdb.addClassView(SimpleDoc, 'name', ['name'])
 
@@ -536,7 +566,8 @@ class TestCouchable(unittest.TestCase):
         del a
         del b
         del c
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
 
         fullName = self.cdb.addClassView(SimpleDoc, 'name', ['name'])
 
@@ -569,7 +600,8 @@ class TestCouchable(unittest.TestCase):
         del a
         del b
         del c
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
 
         self.assertIn('self.attach', self.cdb.db[_id]['_attachments'])
 
@@ -597,7 +629,7 @@ class TestCouchable(unittest.TestCase):
         self.assertTrue(a.regex.match('abcd'))
         self.assertEqual(a.regex.match('1234'), None)
 
-    @attr('slow', 'couchable')
+    @attr('slow', 'couchable', 'elis')
     def test_aftermarketAttachments(self):
         b = AftermarketDoc(name='BBB', attach=AftermarketAttachment(b=1, bb=2))
         c = AftermarketDoc(name='CCC', attach=AftermarketAttachment(c=1, cc=2), bb=b)
@@ -613,7 +645,8 @@ class TestCouchable(unittest.TestCase):
         del a
         del b
         del c
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
 
         self.assertIn('self.attach', self.cdb.db[_id]['_attachments'])
 
@@ -640,6 +673,11 @@ class TestCouchable(unittest.TestCase):
 
         self.assertTrue(a.regex.match('abcd'))
         self.assertEqual(a.regex.match('1234'), None)
+
+        del a
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
 
     @attr('couchable')
     def test_docCycles(self):
@@ -686,7 +724,9 @@ class TestCouchable(unittest.TestCase):
         _id = self.cdb.store(obj)
 
         del obj
-        self.assertFalse(self.cdb._obj_by_id)
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
 
         obj = self.cdb.load(_id)
 
@@ -739,7 +779,8 @@ class TestCouchable(unittest.TestCase):
             del a
             del b
             del c
-            self.assertFalse(self.cdb._obj_by_id)
+            gc.collect()
+            self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
 
             a = self.cdb.load(a_id)
             b = self.cdb.load(b_id)
