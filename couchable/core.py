@@ -342,9 +342,9 @@ class CouchableDb(object):
         @return: The C{._id} of the C{what} parameter, or the list of such IDs if C{what} was a list.
         """
         if skip is None:
-            self._skip_set = set()
+            self._skip_list = []
         else:
-            self._skip_set = set([x for x in skip if hasattr(x, '_id') and hasattr(x, '_rev')])
+            self._skip_list = [x for x in skip if hasattr(x, '_id') and hasattr(x, '_rev')]
         
         if not isinstance(what, list):
             store_list = [what]
@@ -360,7 +360,7 @@ class CouchableDb(object):
         mime_list = []
         bulk_list = []
         for (obj, doc, attachment_dict) in todo_list:
-            if obj not in self._skip_set:
+            if obj not in self._skip_list:
                 if 'pickles' in attachment_dict:
                     content_tup = attachment_dict['pickles']
                     
@@ -533,7 +533,7 @@ class CouchableDb(object):
             #self._obj_by_id[obj._id] = obj
 
         del self._done_dict
-        del self._skip_set
+        del self._skip_list
 
         if not isinstance(what, list):
             return what._id
@@ -691,7 +691,7 @@ class CouchableDb(object):
 
         # Means this needs to be a new top-level document.
         if base_cls and not topLevel:
-            if data not in self._skip_set:
+            if data not in self._skip_list:
                 self._store(data)
 
             return '{}{}:{}'.format(FIELD_NAME, 'id', data._id)
