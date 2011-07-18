@@ -59,30 +59,6 @@ import couchdb.multipart
 #import couchdb.mapping
 
 """
-import couchable
-import couchdb
-server = couchdb.Server()
-try:
-    cdb = server['pykour']
-except:
-    cdb = server.create('pykour')
-
-class C(couchable.Couchable):
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-
-c=C(foo=1,bar=2,_baz=3)
-d=C(_c=c)
-e=C(c=c, d=d, couchable_foo={'couchable_bar':9})
-couchable.store(e, cdb)
-print 'c', c._id
-print 'd', d._id
-print 'e', e._id
-i=e._id
-del c
-del d
-del e
-e=couchable.load(i, cdb)
 """
 
 def importstr(module_str, from_=None):
@@ -197,7 +173,7 @@ class CouchableDb(object):
     _obj_by_id_cache = weakref.WeakValueDictionary()
     _cls2srcMd5sum_dict = {}
 
-    def __init__(self, name=None, url='http://localhost:5984/', db=None):
+    def __init__(self, url=None, name=None, db=None):
         """
         Creates a CouchableDb wrapper around a couchdb.Database object.  If
         the database does not yet exist, it will be created.
@@ -209,17 +185,33 @@ class CouchableDb(object):
         @type  db: couchdb.Database
         @param db: An instance of couchdb.Database that has already been instantiated.  Overrides the name and url params.
         """
+        
+        if db is not None:
+            server_url, name = db.resource.url.rstrip('/').rsplit('/', 1)
+        elif name is None:
+            if '/' in url:
+                server_url, name = url.rstrip('/').rsplit('/', 1)
+            else:
+                name = url
+                server_url = 'http://localhost:5984/'
+        else:
+            server_url = url
+        url = server_url + '/' + name
 
         # This dance is odd due to the semantics of how WVD works.
-        cache_key = (url, name)
+        cache_key = url
         self._obj_by_id = self._obj_by_id_cache.get(cache_key, weakref.WeakValueDictionary())
-        self._obj_by_id_cache[(url, name)] = self._obj_by_id
+        self._obj_by_id_cache[cache_key] = self._obj_by_id
 
-        self.name = name
         self.url = url
+        self.server_url = server_url
+        self.name = name
+        
+        #print self.url, self.server_url, self.name
+        
 
         if db is None:
-            self.server = couchdb.Server(self.url)
+            self.server = couchdb.Server(self.server_url)
 
             try:
                 db = self.server[self.name]
@@ -418,7 +410,7 @@ class CouchableDb(object):
             #print 'msg', msg
             #print 'data', str(data.getvalue())
 
-        print 'hitting bulk docs:', [x for x in [str(bulk_tup[1].get('_id', None)) for bulk_tup in bulk_list] if 'CoordinateSystem' not in x]
+        #print 'hitting bulk docs:', [x for x in [str(bulk_tup[1].get('_id', None)) for bulk_tup in bulk_list] if 'CoordinateSystem' not in x]
         ret_list = self.db.update([bulk_tup[1] for bulk_tup in bulk_list])
         
         #print ret_list
@@ -1041,9 +1033,12 @@ class CouchableDb(object):
                     type_str, data = data.split(':', 1)
                     if method_str == 'append':
                         if type_str == 'unicode':
-                            return unicode(data, 'utf8')
+                            if isinstance(data, unicode):
+                                return data
+                            else:
+                                return unicode(data, 'utf8')
                         if type_str == 'str':
-                            return data
+                            return str(data)
 
                     elif method_str == 'repr':
                         if type_str in __builtins__:

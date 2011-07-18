@@ -146,7 +146,7 @@ class TestCouchable(unittest.TestCase):
             'int': 1,
             'float': 2.0,
             'str': 'sss',
-            'unicode': u'uuu',
+            'unicode': u'uuu\u2603',
             'set': set(['a', 'b']),
             'frozenset': frozenset(['a', 'b']),
             'list': [1, 2.0, 's', u'u'],
