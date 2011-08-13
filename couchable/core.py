@@ -101,7 +101,18 @@ def _packer(*args):
             _pack_handlers[type_] = func_
             _pack_handlers[typestr(type_)] = func_
             #packer(type_, func_)
-        return func_
+
+        def func__(self, parent_doc, data, *args, **kwargs):
+            if id(data) in self._cycle_set:
+                raise ValueError("Object {} is cycle root: {!r}".format(name, data))
+
+            try:
+                self._cycle_set.add(id(data))
+                return func_(self, parent_doc, data, *args, **kwargs)
+            finally:
+                self._cycle_set.remove(id(data))
+
+        return func__
     return func
 
 def custom_packer(type_, pack_func, unpack_func, simple=True):
@@ -344,6 +355,7 @@ class CouchableDb(object):
             store_list = what
 
         self._done_dict = collections.OrderedDict()
+        self._cycle_set = set()
 
         for obj in store_list:
             self._store(obj)
@@ -421,110 +433,8 @@ class CouchableDb(object):
                 obj._rev = _rev
                 self._obj_by_id[obj._id] = obj
 
-        #externalAttachments_bool = False
-        #for (obj, doc, attachment_dict) in self._done_dict.values():
-        #    doc['_attachments'] = {}
-        #
-        #    for content_name, content_tup in list(attachment_dict.items()):
-        #        if content_name == 'pickles':
-        #            content = doGzip(pickle.dumps(content_tup, pickle.HIGHEST_PROTOCOL))
-        #            content_type = 'application/pickle'
-        #        else:
-        #            content, content_type = content_tup
-        #            
-        #        if len(content) <= self._maxStrLen * 2:
-        #        else:
-        #            externalAttachments_bool = True
-        #            doc[FIELD_NAME]['attaching'] = True
-        #
-        #
-        ##if externalAttachments_bool:
-        ##    for (obj, doc, attachment_dict) in self._done_dict.values():
-        ##        doc[FIELD_NAME]['attaching'] = True
-        #
-        #
-        ##for k,v in self._done_dict.items():
-        ##    print '\n' + str(k)
-        ##    print '\t', v
-        #
-        ## Actually (finally) send the data to couchdb.
-        #ret_list = self.db.update([x[1] for x in self._done_dict.values()])
-        #
-        #
-        ##try:
-        ##    #pprint.pprint([(x[0]._id, getattr(x[0], '_rev', None)) for x in self._done_dict.values()])
-        ##    print datetime.datetime.now(), "214: self.db.update"
-        ##    ret_list = []
-        ##    for x in self._done_dict.values():
-        ##        ret_list.extend(self.db.update([x[1]]))
-        ##except:
-        ##    import json
-        ##    print >>file('/tmp/json_failure.out', 'wb'), json.dumps(x[1])
-        ##    print len(repr(self._done_dict.values()))
-        ##    print type(self._done_dict.values()[0][1])
-        ##    raise
-        #
-        #print ret_list
-        #for (success, _id, _rev), (obj, doc, attachment_dict) in itertools.izip(ret_list, self._done_dict.values()):
-        #    if not success:
-        #        raise _rev
-        #    else:
-        #        obj._rev = _rev
-        #        
-        #if externalAttachments_bool:
-        #    for (obj, doc, attachment_dict) in self._done_dict.values():
-        #        if 'attaching' in doc[FIELD_NAME]:
-        #            for content_name, content_tup in attachment_dict.items():
-        #                if content_name == 'pickles':
-        #                    content = doGzip(pickle.dumps(content_tup, pickle.HIGHEST_PROTOCOL))
-        #                    content_type = 'application/pickle'
-        #                else:
-        #                    content, content_type = content_tup
-        #                #print datetime.datetime.now(), "225: self.db.put_attachment"
-        #                self.db.put_attachment(doc, content, content_name, content_type)
-        #                obj._rev = doc['_rev']
-        #
-        #            del doc[FIELD_NAME]['attaching']
-        #        
-        #    ret_list = self.db.update([x[1] for x in self._done_dict.values()])
-        #
-        #    for (success, _id, _rev), (obj, doc, attachment_dict) in itertools.izip(ret_list, self._done_dict.values()):
-        #        if not success:
-        #            raise _rev
-        #        else:
-        #            obj._rev = _rev
-        #
-        #for (obj, doc, attachment_dict) in self._done_dict.values():
-        #    self._obj_by_id[obj._id] = obj
-
-
-        #for (success, _id, _rev), (obj, doc, attachment_dict) in itertools.izip(ret_list, self._done_dict.values()):
-        #    #success, _id, _rev = ret
-        #    #obj, doc, attachment_dict = store_tuple
-        #    if success:
-        #        for content_name, content_tup in attachment_dict.items():
-        #            if content_name == 'pickles':
-        #                content = doGzip(pickle.dumps(content_tup, pickle.HIGHEST_PROTOCOL))
-        #                content_type = 'application/pickle'
-        #            else:
-        #                content, content_type = content_tup
-        #            #print datetime.datetime.now(), "225: self.db.put_attachment"
-        #            self.db.put_attachment(doc, content, content_name, content_type)
-        #            
-        #        if 'attaching' in doc[FIELD_NAME]:
-        #            del doc[FIELD_NAME]['attaching']
-        #            self.db.save(doc)
-        #
-        #        # This is important, even if there are no attachments
-        #        obj._rev = doc['_rev']
-        #    else:
-        #        raise _rev # it's actually an exception
-        #        #print "Error:", ret
-        #        #print "\tobj:", getattr(obj, '_rev', None), "vs. db:", self.db[_id]['_rev']
-
-            #self._obj_by_id[obj._id] = obj
-
         del self._done_dict
+        del self._cycle_set
         del self._skip_list
 
         if not isinstance(what, list):
