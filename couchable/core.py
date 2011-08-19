@@ -428,7 +428,7 @@ class CouchableDb(object):
         #print ret_list
         for (success, _id, _rev), (obj, doc) in itertools.izip(ret_list, bulk_list):
             if not success:
-                log.warn("Error updating {} {}, {}: ".format(type(obj), _id, _rev) + doc)
+                log.warn("Error updating {} {}, {}: ".format(type(obj), _id, _rev) + repr(doc))
                 raise _rev
             else:
                 obj._rev = _rev
