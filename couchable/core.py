@@ -196,7 +196,7 @@ class CouchableDb(object):
         @type  db: couchdb.Database
         @param db: An instance of couchdb.Database that has already been instantiated.  Overrides the name and url params.
         """
-        
+
         if db is not None:
             server_url, name = db.resource.url.rstrip('/').rsplit('/', 1)
         elif name is None:
@@ -217,9 +217,9 @@ class CouchableDb(object):
         self.url = url
         self.server_url = server_url
         self.name = name
-        
+
         #print self.url, self.server_url, self.name
-        
+
 
         if db is None:
             self.server = couchdb.Server(self.server_url)
@@ -348,7 +348,7 @@ class CouchableDb(object):
             self._skip_list = []
         else:
             self._skip_list = [x for x in skip if hasattr(x, '_id') and hasattr(x, '_rev')]
-        
+
         if not isinstance(what, list):
             store_list = [what]
         else:
@@ -359,7 +359,7 @@ class CouchableDb(object):
 
         for obj in store_list:
             self._store(obj)
-            
+
         todo_list = list(self._done_dict.values())
         mime_list = []
         bulk_list = []
@@ -367,22 +367,22 @@ class CouchableDb(object):
             if obj not in self._skip_list:
                 if 'pickles' in attachment_dict:
                     content_tup = attachment_dict['pickles']
-                    
+
                     content = doGzip(pickle.dumps(content_tup, pickle.HIGHEST_PROTOCOL))
                     content_type = 'application/pickle'
-                    
+
                     attachment_dict['pickles'] = (content, content_type)
-    
+
                 total_len = 0
                 for content_name, (content, content_type) in list(attachment_dict.items()):
                     total_len += len(content)
-                    
+
                 if total_len > self._maxStrLen * 2:
                     mime_list.append((obj, doc, attachment_dict, total_len))
                 else:
                     doc['_attachments'] = {content_name: {'content_type': content_type, 'data': base64.b64encode(content)} for content_name, (content, content_type) in attachment_dict.items()}
                     bulk_list.append((obj, doc))
-                    
+
         #print 'mime', mime_list
         #print 'bulk', bulk_list
 
@@ -391,43 +391,44 @@ class CouchableDb(object):
             if '_rev' not in doc:
                 #print 'missing rev', doc['_id'], id(doc)
                 _, doc['_rev'] = self.db.save({'_id': doc['_id'], 'foo':'guess the post did not work'})
-            
+
             fileobj = cStringIO.StringIO()
 
             with couchdb.multipart.MultipartWriter(fileobj, headers=None, subtype='form-data') as mpw:
                 mime_headers = {'Content-Disposition': '''form-data; name="_doc"'''}
                 mpw.add('application/json', couchdb.json.encode(doc), mime_headers)
-                
+
                 for content_name, (content, content_type) in list(attachment_dict.items()):
                     mime_headers = {'Content-Disposition': '''form-data; name="_attachments"; filename="{}"'''.format(content_name)}
                     mpw.add(content_type, content, mime_headers)
-                    
+
             header_str, blank_str, body = fileobj.getvalue().split('\r\n', 2)
-                    
+
             #print repr(header_str)
             #print body
 
             http_headers = {'Referer': self.db.resource.url, 'Content-Type': header_str[len('Content-Type: '):]}
             params = {}
             status, msg, data = self.db.resource.post(doc['_id'], body, http_headers, **params)
-            
+
             data_dict = couchdb.json.decode(data.getvalue())
-            
+
             #print data_dict
-            
+
             obj._id = data_dict['id']
             obj._rev = data_dict['rev']
-            
+
             #print 'status', status
             #print 'msg', msg
             #print 'data', str(data.getvalue())
 
         #print 'hitting bulk docs:', [x for x in [str(bulk_tup[1].get('_id', None)) for bulk_tup in bulk_list] if 'CoordinateSystem' not in x]
         ret_list = self.db.update([bulk_tup[1] for bulk_tup in bulk_list])
-        
+
         #print ret_list
         for (success, _id, _rev), (obj, doc) in itertools.izip(ret_list, bulk_list):
             if not success:
+                log.warn("Error updating {} {}, {}: ".format(type(obj), _id, _rev) + doc)
                 raise _rev
             else:
                 obj._rev = _rev
@@ -488,7 +489,7 @@ class CouchableDb(object):
         except Exception, e:
             log.error(name)
             raise
-            
+
         #if handler:
         #    try:
         #        return handler(self, parent_doc, data, attachment_dict, name, isKey)
@@ -617,10 +618,10 @@ class CouchableDb(object):
             doc = parent_doc
         else:
             doc = {}
-            
+
         self._objInfo_doc(data, doc)
         update_dict = self._pack_dict_keyMeansObject(parent_doc, data.__dict__, attachment_dict, name, True, topLevel)
-        
+
         assert set(doc).intersection(set(update_dict)) == set(), repr(set(doc).intersection(set(update_dict)))
 
         doc.update(update_dict)
@@ -767,7 +768,7 @@ class CouchableDb(object):
         """
         if isKey:
             key_str = '{}{}:{}:{!r}'.format(FIELD_NAME, 'key', typestr(data), data)
-            
+
             parent_doc.setdefault(FIELD_NAME, {})
             parent_doc[FIELD_NAME].setdefault('keys', {})
             parent_doc[FIELD_NAME]['keys'][key_str] = self._pack_consargs_keyAsKey(parent_doc, data, attachment_dict, name, False)
@@ -879,7 +880,7 @@ class CouchableDb(object):
 
         if topLevel and private_keys:
             private_doc = parent_doc
-                
+
             parent_doc.setdefault(FIELD_NAME, {})
             #doc[FIELD_NAME].setdefault('private', {})
             parent_doc[FIELD_NAME]['private'] = {
@@ -908,9 +909,9 @@ class CouchableDb(object):
     @_packer(type)
     def _pack_pickle(self, parent_doc, data, attachment_dict, name, isKey):
         attachment_dict.setdefault('pickles', {})
-        
+
         assert name not in attachment_dict['pickles']
-        
+
         attachment_dict['pickles'][name] = data
 
         #parent_doc.setdefault(FIELD_NAME, {})
