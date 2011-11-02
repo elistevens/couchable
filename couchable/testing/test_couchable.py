@@ -60,7 +60,7 @@ class Simple(object):
     def __init__(self, **kwargs):
         for name, value in kwargs.items():
             setattr(self, name, value)
-            
+
     def __repr__(self):
         return repr(self.__dict__)
 
@@ -339,7 +339,7 @@ class TestCouchable(unittest.TestCase):
         finally:
             sys.setrecursionlimit(limit)
 
-    @attr('couchable', 'elis')
+    @attr('couchable')
     def test_32_types(self):
         obj = Simple(int=int)
 
@@ -359,7 +359,7 @@ class TestCouchable(unittest.TestCase):
     def test_40_external_edits(self):
         obj = Simple(i=1)
         _id = self.cdb.store(obj)
-        
+
         doc = self.cdb.db.get(_id)
         doc['i'] = 2
         self.cdb.db.save(doc)
@@ -368,23 +368,23 @@ class TestCouchable(unittest.TestCase):
 
         obj = self.cdb.load(_id)
         self.assertEqual(obj.i, 2)
-        
+
         #assert False
-        
-        
-    @attr('couchable', 'elis')
+
+
+    @attr('couchable')
     def test_40_nested_docs_with_tuples(self):
         nt = NamedTupleABC(1,2,3)
-        
+
         targetobj = Simple(aaa=nt, target={nt: 'bbb'}, zzz=nt, _foo=1)
         obj = Simple(sub={nt: targetobj}, abc2={nt: 'abc2'}, _foo=1)
-        
+
         #subobj.o = obj
 
         self.cdb.store(targetobj)
         _id = self.cdb.store(obj)
-        
-        
+
+
         target_id = targetobj._id
 
         del obj
@@ -393,26 +393,26 @@ class TestCouchable(unittest.TestCase):
         self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
 
         #obj = self.cdb.load(_id)
-        
+
         doc = self.cdb.db[target_id]
-        
+
         self.assertIn('keys', doc['couchable:'])
-        
+
         #self.assertEqual(type(obj.sub.abc), NamedTupleABC)
         #self.assertEqual(obj.sub.abc.a, 1)
         #
         #self.assertEqual(type(obj.sub.ts), TupleSubclass)
         #self.assertEqual(obj.sub.ts[3], 4)
-        
+
         #assert False
 
 
-    @attr('couchable', 'elis')
+    @attr('couchable')
     def test_40_pickles(self):
         pk = SimplePickle(a=1, b=2, c=3)
-        
+
         obj = Simple(d={'pk': pk})
-        
+
         _id = self.cdb.store(obj)
 
         del obj
@@ -425,13 +425,35 @@ class TestCouchable(unittest.TestCase):
         self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
 
         obj = self.cdb.load(_id)
-        
+
         self.assertEqual(obj.d['pk'].a, 1)
-        
+
         #assert False
 
-
     @attr('couchable', 'elis')
+    def test_40_tuple_pickles(self):
+        pk = SimplePickle(a=1, b=2, c=3)
+
+        obj = Simple(t=(pk,))
+
+        _id = self.cdb.store(obj)
+
+        del obj
+        del pk
+        gc.collect()
+
+        #for v in self.cdb._obj_by_id.values():
+        #    print v
+        #    print gc.get_referrers(v)
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
+        obj = self.cdb.load(_id)
+
+        self.assertEqual(obj.t[0].a, 1)
+
+        #assert False
+
+    @attr('couchable')
     def test_nonStrKeys(self):
         d = {1234:'ints', (1,2,3,4):'tuples', frozenset([1,1,2,2,3,3]): 'frozenset', None: 'none', SimpleKey(this_is_a_key=True):'truth'}
 
@@ -629,7 +651,7 @@ class TestCouchable(unittest.TestCase):
         self.assertTrue(a.regex.match('abcd'))
         self.assertEqual(a.regex.match('1234'), None)
 
-    @attr('slow', 'couchable', 'elis')
+    @attr('slow', 'couchable')
     def test_aftermarketAttachments(self):
         b = AftermarketDoc(name='BBB', attach=AftermarketAttachment(b=1, bb=2))
         c = AftermarketDoc(name='CCC', attach=AftermarketAttachment(c=1, cc=2), bb=b)

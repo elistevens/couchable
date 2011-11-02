@@ -1001,9 +1001,12 @@ class CouchableDb(object):
                     if 'args' in info and 'kwargs' in info:
                         #print cls, doc['args'], doc['kwargs']
                         try:
-                            inst = cls(*info['args'], **info['kwargs'])
+                            args = self._unpack(parent_doc, info['args'], loaded_dict)
+                            kwargs = self._unpack(parent_doc, info['kwargs'], loaded_dict)
+
+                            inst = cls(*args, **kwargs)
                         except:
-                            print cls, info['args'], info['kwargs']
+                            print cls, args, kwargs
                             raise
 
                     else:
