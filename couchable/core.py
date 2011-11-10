@@ -23,6 +23,8 @@ import logging
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 
+print __name__
+
 
 """
 foo
@@ -227,6 +229,7 @@ class CouchableDb(object):
             try:
                 db = self.server[self.name]
             except:
+                log.warn("Creating DB: {}".format(self.url))
                 db = self.server.create(self.name)
 
         self.db = db
@@ -344,6 +347,8 @@ class CouchableDb(object):
         @rtype: str or list
         @return: The C{._id} of the C{what} parameter, or the list of such IDs if C{what} was a list.
         """
+        log.info('CouchableDb.store(what={!r}, skip={!r})'.format(what, skip))
+
         if skip is None:
             self._skip_list = []
         else:
@@ -1075,6 +1080,8 @@ class CouchableDb(object):
         @rtype: obj or list
         @return: The object indicated by the C{what} parameter, or a list of such objects if C{what} was a list.
         """
+        log.info('CouchableDb.load(what={!r}, loaded={!r})'.format(what, loaded))
+
         id_list = []
 
         if isinstance(loaded, list):
