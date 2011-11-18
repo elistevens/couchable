@@ -20,10 +20,11 @@
 
 # logging
 import logging
-log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+log_api = logging.getLogger(__name__.replace('core', 'api'))
+log_api.setLevel(logging.WARN)
 
-print __name__
+log_internal = logging.getLogger(__name__.replace('core', 'internal'))
+log_internal.setLevel(logging.WARN)
 
 
 """
@@ -229,7 +230,7 @@ class CouchableDb(object):
             try:
                 db = self.server[self.name]
             except:
-                log.warn("Creating DB: {}".format(self.url))
+                log_api.warn("Creating DB: {}".format(self.url))
                 db = self.server.create(self.name)
 
         self.db = db
@@ -347,8 +348,6 @@ class CouchableDb(object):
         @rtype: str or list
         @return: The C{._id} of the C{what} parameter, or the list of such IDs if C{what} was a list.
         """
-        log.info('CouchableDb.store(what={!r}, skip={!r})'.format(what, skip))
-
         if skip is None:
             self._skip_list = []
         else:
@@ -358,6 +357,11 @@ class CouchableDb(object):
             store_list = [what]
         else:
             store_list = what
+
+        if len(store_list) > 3:
+            log_api.info('CouchableDb.store(what={!r}, skip={!r})'.format(store_list[:3] + ['...'], skip))
+        else:
+            log_api.info('CouchableDb.store(what={!r}, skip={!r})'.format(what, skip))
 
         self._done_dict = collections.OrderedDict()
         self._cycle_set = set()
@@ -433,7 +437,7 @@ class CouchableDb(object):
         #print ret_list
         for (success, _id, _rev), (obj, doc) in itertools.izip(ret_list, bulk_list):
             if not success:
-                log.warn("Error updating {} {}, {}: ".format(type(obj), _id, _rev) + repr(doc))
+                log_internal.warn("Error updating {} {}, {}: ".format(type(obj), _id, _rev) + repr(doc))
                 raise _rev
             else:
                 obj._rev = _rev
@@ -490,9 +494,9 @@ class CouchableDb(object):
             #print ''.join(traceback.format_stack())
             return handler(self, parent_doc, data, attachment_dict, name, isKey)
         except RuntimeError:
-            log.error(name)
+            log_internal.error(name)
         except Exception, e:
-            log.error(name)
+            log_internal.error(name)
             raise
 
         #if handler:
@@ -1080,8 +1084,6 @@ class CouchableDb(object):
         @rtype: obj or list
         @return: The object indicated by the C{what} parameter, or a list of such objects if C{what} was a list.
         """
-        log.info('CouchableDb.load(what={!r}, loaded={!r})'.format(what, loaded))
-
         id_list = []
 
         if isinstance(loaded, list):
@@ -1094,6 +1096,12 @@ class CouchableDb(object):
             load_list = [what]
         else:
             load_list = what
+
+        if len(load_list) > 3:
+            log_api.info('CouchableDb.load(what={!r}, loaded={!r})'.format(load_list[:3] + ['...'], loaded))
+        else:
+            log_api.info('CouchableDb.load(what={!r}, loaded={!r})'.format(what, loaded))
+
 
         for item in load_list:
             #print "item", item
@@ -1134,12 +1142,8 @@ class CouchableDb(object):
 
     def _load(self, _id, loaded_dict):
         if _id not in loaded_dict:
-            #try:
-                #print datetime.datetime.now(), "690: self.db[_id]"
-                loaded_dict[_id] = self.db[_id]
-            #except:
-            #    print "problem:", _id
-            #    raise
+            log_internal.info("Fetching object from DB: {}".format(_id))
+            loaded_dict[_id] = self.db[_id]
 
         doc = loaded_dict[_id]
 
@@ -1147,12 +1151,7 @@ class CouchableDb(object):
 
         obj = self._obj_by_id.get(_id, None)
         if obj is None or getattr(obj, '_rev', None) != doc['_rev']:
-            #print obj is None or getattr(obj, '_id', 'no id'), obj is None or getattr(obj, '_rev', 'no rev'), doc['_rev']
-            #print self._obj_by_id.items()
-
-            #if 'pickles' in doc[FIELD_NAME]:
-            #    doc[FIELD_NAME]['pickles'] = pickle.loads(doc[FIELD_NAME]['pickles'])
-
+            log_internal.info("Unpacking object: {}".format(_id))
             obj = self._unpack(doc, doc, loaded_dict, obj)
 
         base_cls, func_tuple = findHandler(type(obj), _couchable_types)
@@ -1162,7 +1161,7 @@ class CouchableDb(object):
         try:
             obj._cdb = self
         except:
-            print obj
+            log_internal.exception('Cannot set obj._cdb to self, obj: {!r}'.format(obj))
             raise
 
         return obj
