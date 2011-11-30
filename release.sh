@@ -6,6 +6,8 @@ UPLOAD=$2
 if [ "$VER" == "" ]
 then
     echo "Must specify a version number."
+    echo "./release.sh 9.9.9a1 upload"
+    git tag | tail -n 10
     exit
 fi
 

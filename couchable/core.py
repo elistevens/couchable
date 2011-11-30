@@ -405,7 +405,11 @@ class CouchableDb(object):
 
             with couchdb.multipart.MultipartWriter(fileobj, headers=None, subtype='form-data') as mpw:
                 mime_headers = {'Content-Disposition': '''form-data; name="_doc"'''}
-                mpw.add('application/json', couchdb.json.encode(doc), mime_headers)
+                try:
+                    mpw.add('application/json', couchdb.json.encode(doc), mime_headers)
+                except TypeError:
+                    log_internal.exception("Cannot json.encode: {!r}".format(doc))
+                    raise
 
                 for content_name, (content, content_type) in list(attachment_dict.items()):
                     mime_headers = {'Content-Disposition': '''form-data; name="_attachments"; filename="{}"'''.format(content_name)}
@@ -437,7 +441,7 @@ class CouchableDb(object):
         #print ret_list
         for (success, _id, _rev), (obj, doc) in itertools.izip(ret_list, bulk_list):
             if not success:
-                log_internal.warn("Error updating {} {}, {}: ".format(type(obj), _id, _rev) + repr(doc))
+                log_internal.warn("Error updating {}: {} @ {}".format(type(obj), _id, _rev)) # + repr(doc))
                 raise _rev
             else:
                 obj._rev = _rev
@@ -462,12 +466,11 @@ class CouchableDb(object):
             func_tuple[0](obj, self)
 
         if not hasattr(obj, '_id'):
-            #obj._id = '{}:{}'.format(typestr(obj), uuid.uuid4()).lstrip('_')
             newid(obj)
             assert obj._id not in self._obj_by_id
 
         if obj._id not in self._done_dict:
-            self._done_dict[obj._id] = (obj, {}, [])
+            self._done_dict[obj._id] = (obj, {}, {})
 
             attachment_dict = {}
 
@@ -493,8 +496,9 @@ class CouchableDb(object):
             #print "Calling _pack: {}".format((data, attachment_dict, name))
             #print ''.join(traceback.format_stack())
             return handler(self, parent_doc, data, attachment_dict, name, isKey)
-        except RuntimeError:
-            log_internal.error(name)
+        #except RuntimeError:
+        #    log_internal.error(name)
+        #    raise
         except Exception, e:
             log_internal.error(name)
             raise
@@ -790,7 +794,7 @@ class CouchableDb(object):
         elif isinstance(data, tuple) and type(data) != tuple and type(data).__new__ != tuple.__new__:
             return self._objInfo_consargs(data, {}, self._pack_list_noKey(parent_doc, list(data), attachment_dict, name, False))
         else:
-            return self._objInfo_consargs(data, {}, [self._pack_list_noKey(parent_doc, list(data), attachment_dict, name, False)])
+            return self._objInfo_consargs(data, {}, args=[self._pack_list_noKey(parent_doc, list(data), attachment_dict, name, False)])
 
     @_packer(list)
     def _pack_list_noKey(self, parent_doc, data, attachment_dict, name, isKey):
@@ -819,8 +823,6 @@ class CouchableDb(object):
             #assert not isObjDict
 
             return self._pack_object(parent_doc, data, attachment_dict, name, isKey)
-
-            #return self._objInfo_consargs(data, {}, [self._pack_list_noKey(parent_doc, list(data), attachment_dict, name, False)])
 
         return [self._pack(parent_doc, x, attachment_dict, '{}[{}]'.format(name, i), False) for i, x in enumerate(data)]
 
@@ -856,18 +858,17 @@ class CouchableDb(object):
         if type(data) is collections.OrderedDict:
             assert not isObjDict, "{}: {}".format(name, str(type(data)))
 
+            # We do this so that the ordered-ness doesn't prevent us from using
+            # it like a normal dict in views.  May change this...
             doc = self._pack_dict_keyMeansObject(parent_doc, dict(data.items()), attachment_dict, name, False)
-            self._objInfo_consargs(data, doc, args=[[list(x) for x in data.items()]])
-            #
-            #self._objInfo_doc(data, doc)
-            #doc[FIELD_NAME]['keyOrder'] = list(data.keys())
+
+            self._objInfo_consargs(data, doc, args=[self._pack_list_noKey(parent_doc, list(data.items()), attachment_dict, name, False)])
 
             return doc
 
         if type(data) is not dict:
             assert not isObjDict, "{}: {}".format(name, str(type(data)))
 
-            #return self._objInfo_consargs(data, {}, [], self._pack_dict_keyMeansObject(parent_doc, dict(data.items()), attachment_dict, name, False))
             return self._pack_object(parent_doc, data, attachment_dict, name, False) # FIXME???
 
 
@@ -1009,13 +1010,15 @@ class CouchableDb(object):
 
                     if 'args' in info and 'kwargs' in info:
                         #print cls, doc['args'], doc['kwargs']
+                        args = None
+                        kwargs = None
                         try:
                             args = self._unpack(parent_doc, info['args'], loaded_dict)
                             kwargs = self._unpack(parent_doc, info['kwargs'], loaded_dict)
 
                             inst = cls(*args, **kwargs)
                         except:
-                            print cls, args, kwargs
+                            log_internal.error("Error unpacking args, kwargs for: {} {} {}".format(cls, args, kwargs))
                             raise
 
                     else:
@@ -1053,7 +1056,7 @@ class CouchableDb(object):
                 else:
                     return {self._unpack(parent_doc, k, loaded_dict): self._unpack(parent_doc, v, loaded_dict) for k,v in doc.items()}
         except:
-            print "Error with:", doc
+            log_internal.exception("Error with: {}".format(doc))
             raise
 
     def load(self, what, loaded=None):
@@ -1143,7 +1146,11 @@ class CouchableDb(object):
     def _load(self, _id, loaded_dict):
         if _id not in loaded_dict:
             log_internal.info("Fetching object from DB: {}".format(_id))
-            loaded_dict[_id] = self.db[_id]
+            try:
+                loaded_dict[_id] = self.db[_id]
+            except:
+                log_internal.exception("Error fetching id: {}".format(_id))
+                raise
 
         doc = loaded_dict[_id]
 
@@ -1274,6 +1281,7 @@ def newid(obj, id_func=None, noUuid=False, noType=False, sep=':'):
             id_list.append(str(uuid.uuid1()))
 
         obj._id = sep.join(id_list).lstrip('_')
+        log_internal.debug("Assigning _id {} to {}".format(obj._id, obj))
 
 # Attachments
 def doGzip(data, compresslevel=1):

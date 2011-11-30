@@ -62,7 +62,10 @@ class Simple(object):
             setattr(self, name, value)
 
     def __repr__(self):
-        return repr(self.__dict__)
+        return '<{!r} {!r} at {:#08x}>'.format(type(self), vars(self), id(self))
+
+    def __eq__(self, other):
+        return type(self) == type(other) and vars(self) == vars(other)
 
 class SimpleKey(Simple):
     def __eq__(self, other):
@@ -81,6 +84,9 @@ class SimpleDoc(couchable.CouchableDoc):
     def __init__(self, **kwargs):
         for name, value in kwargs.items():
             setattr(self, name, value)
+
+    def __repr__(self):
+        return '<{!r} {!r} at {:#08x}>'.format(type(self), vars(self), id(self))
 
 class SimpleAttachment(couchable.CouchableAttachment):
     def __init__(self, **kwargs):
@@ -194,8 +200,8 @@ class TestCouchable(unittest.TestCase):
 
         obj = self.cdb.load(_id)
 
-        print obj
-        print obj.__dict__
+        #print obj
+        #print obj.__dict__
 
         self.assertEqual(obj.x, 4)
         self.assertEqual(type(obj), DictSubclass)
@@ -311,14 +317,14 @@ class TestCouchable(unittest.TestCase):
         self.assertEqual(type(obj.ts), TupleSubclass)
         self.assertEqual(obj.ts[3], 4)
 
-    @attr('couchable')
-    def test_31_odict(self):
+    @attr('couchable', 'odict')
+    def test_31_odict0_json(self):
         limit = sys.getrecursionlimit()
         try:
             sys.setrecursionlimit(100)
 
 
-            kv_list = [(chr(ord('a') + i), i) for i in range(10)]
+            kv_list = [(chr(ord('a') + i), i) for i in range(3)]
             od = collections.OrderedDict()
             for k,v in kv_list:
                 od[k] = v
@@ -330,6 +336,131 @@ class TestCouchable(unittest.TestCase):
             del obj
             gc.collect()
             self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
+            obj = self.cdb.load(_id)
+
+            self.assertEqual(type(obj.od), collections.OrderedDict)
+            self.assertEqual(list(obj.od.items()), kv_list)
+
+        finally:
+            sys.setrecursionlimit(limit)
+
+    @attr('couchable', 'odict')
+    def test_31_odict1_obj(self):
+        limit = sys.getrecursionlimit()
+        try:
+            sys.setrecursionlimit(100)
+
+
+            kv_list = [(chr(ord('a') + i), i) for i in range(3)]
+            kv_list += [('Simple', Simple(a=1, b=2))]
+            od = collections.OrderedDict()
+            for k,v in kv_list:
+                od[k] = v
+
+            obj = Simple(od=od)
+
+            _id = self.cdb.store(obj)
+
+            del obj
+            gc.collect()
+            self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
+            obj = self.cdb.load(_id)
+
+            self.assertEqual(type(obj.od), collections.OrderedDict)
+            self.assertEqual(list(obj.od.items()), kv_list)
+
+        finally:
+            sys.setrecursionlimit(limit)
+
+
+    @attr('couchable', 'odict')
+    def test_31_odict2_doc(self):
+        limit = sys.getrecursionlimit()
+        try:
+            sys.setrecursionlimit(200)
+
+            kv_list = []
+            #kv_list += [(chr(ord('a') + i), i) for i in range(3)]
+            kv_list += [('SimpleDoc', SimpleDoc(a=1, b=2))]
+            od = collections.OrderedDict()
+            for k,v in kv_list:
+                od[k] = v
+
+            obj = Simple(od=od)
+
+            _id = self.cdb.store(obj)
+
+            #print "Vars:", vars(kv_list[-1][1])
+
+            del obj
+            gc.collect()
+            # Can't assert this here, since we've got the Doc above...
+            #self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+            self.assertEqual(len(self.cdb._obj_by_id), 1)
+
+            obj = self.cdb.load(_id)
+
+            self.assertEqual(type(obj.od), collections.OrderedDict)
+            self.assertEqual(list(obj.od.items()), kv_list)
+
+        finally:
+            sys.setrecursionlimit(limit)
+
+    @attr('couchable', 'odict')
+    def test_31_odict3_pickle(self):
+        limit = sys.getrecursionlimit()
+        try:
+            sys.setrecursionlimit(100)
+
+
+            kv_list = [(chr(ord('a') + i), i) for i in range(10)]
+            kv_list += [('SimplePickle', SimplePickle(a=1, b=2))]
+            od = collections.OrderedDict()
+            for k,v in kv_list:
+                od[k] = v
+
+            obj = Simple(od=od)
+
+            _id = self.cdb.store(obj)
+
+            del obj
+            gc.collect()
+            self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
+            obj = self.cdb.load(_id)
+
+            self.assertEqual(type(obj.od), collections.OrderedDict)
+            self.assertEqual(list(obj.od.items()), kv_list)
+
+        finally:
+            sys.setrecursionlimit(limit)
+
+    @attr('couchable', 'odict')
+    def test_31_odict9_all(self):
+        limit = sys.getrecursionlimit()
+        try:
+            sys.setrecursionlimit(100)
+
+
+            kv_list = [(chr(ord('a') + i), i) for i in range(10)]
+            kv_list += [('Simple', Simple(a=1, b=2))]
+            kv_list += [('SimpleDoc', SimpleDoc(a=1, b=2))]
+            kv_list += [('SimplePickle', SimplePickle(a=1, b=2))]
+            od = collections.OrderedDict()
+            for k,v in kv_list:
+                od[k] = v
+
+            obj = Simple(od=od)
+
+            _id = self.cdb.store(obj)
+
+            del obj
+            gc.collect()
+            # Can't assert this here, since we've got the Doc above...
+            #self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+            self.assertEqual(len(self.cdb._obj_by_id), 1)
 
             obj = self.cdb.load(_id)
 
@@ -568,7 +699,7 @@ class TestCouchable(unittest.TestCase):
 
         x = self.cdb.load(self.cdb.db.view('couchable/' + fullName, include_docs=True, startkey=['AAA'], endkey=['BBB', {}]).rows)
 
-        print x
+        #print x
 
         a, b = x
 
@@ -595,7 +726,7 @@ class TestCouchable(unittest.TestCase):
 
         x = self.cdb.load(id_list, self.cdb.db.view('couchable/' + fullName, include_docs=True, startkey=['BBB'], endkey=['CCC', {}]).rows)
 
-        print x
+        #print x
 
         b, c = x
 
