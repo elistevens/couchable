@@ -23,7 +23,7 @@ from setuptools import setup
 
 setup(
     name='couchable',
-    version='0.3.0b11',
+    version='0.3.0b12',
     author='Eli Stevens',
     author_email='wickedgrey@gmail.com',
     url='http://github.com/wickedgrey/couchable',
