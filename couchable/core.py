@@ -317,7 +317,7 @@ class CouchableDb(object):
     #    inst.__dict__.update({copy.deepcopy(k): copy.deepcopy(v) for k,v in self.__dict__.items if k not in ['_cdb']})
 
 
-    def store(self, what, skip=None):
+    def store(self, what, skip=None, additiveOnly=False):
         """
         Stores the documents in the C{what} parameter in CouchDB.  If a C{._id}
         does not yet exist on the object, it will be added.  If the C{._id} is
@@ -353,6 +353,8 @@ class CouchableDb(object):
         else:
             self._skip_list = [x for x in skip if hasattr(x, '_id') and hasattr(x, '_rev')]
 
+        self._additiveOnly = additiveOnly
+
         if not isinstance(what, list):
             store_list = [what]
         else:
@@ -373,6 +375,7 @@ class CouchableDb(object):
         mime_list = []
         bulk_list = []
         for (obj, doc, attachment_dict) in todo_list:
+            log_internal.info("TODO: {}".format(doc['_id']))
             if obj not in self._skip_list:
                 if 'pickles' in attachment_dict:
                     content_tup = attachment_dict['pickles']
@@ -424,6 +427,14 @@ class CouchableDb(object):
             params = {}
             status, msg, data = self.db.resource.post(doc['_id'], body, http_headers, **params)
 
+            if status != 201:
+                log_internal.warn("Error updating multipart, status: {}, msg: {}".format(staus, msg))
+                raise Exception("Error updating multipart, status: {}, msg: {}".format(staus, msg))
+                #print 'status', status
+                #print 'msg', msg
+                #print 'data', str(data.getvalue())
+                #assert status == 201
+
             data_dict = couchdb.json.decode(data.getvalue())
 
             #print data_dict
@@ -431,9 +442,6 @@ class CouchableDb(object):
             obj._id = data_dict['id']
             obj._rev = data_dict['rev']
 
-            #print 'status', status
-            #print 'msg', msg
-            #print 'data', str(data.getvalue())
 
         #print 'hitting bulk docs:', [x for x in [str(bulk_tup[1].get('_id', None)) for bulk_tup in bulk_list] if 'CoordinateSystem' not in x]
         ret_list = self.db.update([bulk_tup[1] for bulk_tup in bulk_list])
@@ -441,7 +449,8 @@ class CouchableDb(object):
         #print ret_list
         for (success, _id, _rev), (obj, doc) in itertools.izip(ret_list, bulk_list):
             if not success:
-                log_internal.warn("Error updating {}: {} @ {}".format(type(obj), _id, _rev)) # + repr(doc))
+                log_internal.warn("Error updating {}: {} @ {}".format(type(obj), _id, getattr(obj, '_rev', None)))
+                #log_internal.warn("Error updating {}: {} > {}".format(type(obj), _id, vars(_rev)))
                 raise _rev
             else:
                 obj._rev = _rev
@@ -450,6 +459,7 @@ class CouchableDb(object):
         del self._done_dict
         del self._cycle_set
         del self._skip_list
+        del self._additiveOnly
 
         if not isinstance(what, list):
             return what._id
@@ -607,7 +617,11 @@ class CouchableDb(object):
 
         # Means this needs to be a new top-level document.
         if base_cls and not topLevel:
-            if data not in self._skip_list:
+            if self._additiveOnly and \
+                    getattr(data, '_id', None) != None and \
+                    getattr(data, '_rev', None) != None:
+                pass
+            elif data not in self._skip_list:
                 self._store(data)
 
             return '{}{}:{}'.format(FIELD_NAME, 'id', data._id)
@@ -1145,7 +1159,7 @@ class CouchableDb(object):
 
     def _load(self, _id, loaded_dict):
         if _id not in loaded_dict:
-            log_internal.info("Fetching object from DB: {}".format(_id))
+            log_internal.debug("Fetching object from DB: {}".format(_id))
             try:
                 loaded_dict[_id] = self.db[_id]
             except:
@@ -1158,7 +1172,7 @@ class CouchableDb(object):
 
         obj = self._obj_by_id.get(_id, None)
         if obj is None or getattr(obj, '_rev', None) != doc['_rev']:
-            log_internal.info("Unpacking object: {}".format(_id))
+            log_internal.debug("Unpacking object: {}".format(_id))
             obj = self._unpack(doc, doc, loaded_dict, obj)
 
         base_cls, func_tuple = findHandler(type(obj), _couchable_types)

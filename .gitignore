@@ -25,16 +25,14 @@ junk
 *.delme
 
 # Temporary, externally sourced
-couchable
-solari*
+#couchable
+#solari*
 
 # For testing solari
-selenium*.jar
+#selenium*.jar
 
 # vim tempfiles
 .*.swp
 
 # test data
 .coverage
-mms/common/storage/data
-gamma_data.csv
