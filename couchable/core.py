@@ -107,7 +107,7 @@ def _packer(*args):
 
         def func__(self, parent_doc, data, *args, **kwargs):
             if id(data) in self._cycle_set:
-                raise ValueError("Object {} is cycle root: {!r}".format(name, data))
+                raise ValueError("Object {} is cycle root: {!r}, {}".format(id(data), args[1], type(data)))#, data))
 
             try:
                 self._cycle_set.add(id(data))
@@ -389,6 +389,7 @@ class CouchableDb(object):
                 for content_name, (content, content_type) in list(attachment_dict.items()):
                     total_len += len(content)
 
+                # FIXME: use a better cutoff
                 if total_len > self._maxStrLen * 2:
                     mime_list.append((obj, doc, attachment_dict, total_len))
                 else:
@@ -510,7 +511,7 @@ class CouchableDb(object):
         #    log_internal.error(name)
         #    raise
         except Exception, e:
-            log_internal.error(name)
+            log_internal.error('{}, {} in {}, {} isKey: {}'.format(name, cls, base_cls, handler, isKey))
             raise
 
         #if handler:
@@ -1151,13 +1152,13 @@ class CouchableDb(object):
 
         if not isinstance(what, list):
             #print "what", what
-            return [self._load(_id, loaded_dict) for _id in id_list][0]
+            return [self._load(_id, loaded_dict, True) for _id in id_list][0]
         else:
             #print "id_list", id_list
-            return [self._load(_id, loaded_dict) for _id in id_list]
+            return [self._load(_id, loaded_dict, True) for _id in id_list]
 
 
-    def _load(self, _id, loaded_dict):
+    def _load(self, _id, loaded_dict, force=False):
         if _id not in loaded_dict:
             log_internal.debug("Fetching object from DB: {}".format(_id))
             try:
@@ -1171,7 +1172,7 @@ class CouchableDb(object):
         #print _id, doc, loaded_dict
 
         obj = self._obj_by_id.get(_id, None)
-        if obj is None or getattr(obj, '_rev', None) != doc['_rev']:
+        if obj is None or getattr(obj, '_rev', None) != doc['_rev'] or force:
             log_internal.debug("Unpacking object: {}".format(_id))
             obj = self._unpack(doc, doc, loaded_dict, obj)
 
