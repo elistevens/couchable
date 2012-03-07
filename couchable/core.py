@@ -1146,6 +1146,10 @@ class CouchableDb(object):
 
                 if len(item) > 2:
                     loaded_dict[item['_id']] = item
+            elif hasattr(item, '_id'):
+                id_list.append(item._id)
+            else:
+                raise Exception("Can't figure out how to load {!r}".format(item))
 
         # FIXME: pre-stuff the loaded_dict cache here
         todo_list = []
