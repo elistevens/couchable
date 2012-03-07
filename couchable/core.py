@@ -316,6 +316,16 @@ class CouchableDb(object):
     #    inst = cls.__new__(cls)
     #    inst.__dict__.update({copy.deepcopy(k): copy.deepcopy(v) for k,v in self.__dict__.items if k not in ['_cdb']})
 
+    def storeRetryUpdate(self, update_func, what, skip=None, additiveOnly=False):
+        while True:
+            try:
+                update_func(what)
+
+                return self.store(what, skip, additiveOnly)
+            except couchdb.http.ResourceConflict:
+                time.sleep(random.random())
+
+                what = self.load(what)
 
     def store(self, what, skip=None, additiveOnly=False):
         """
