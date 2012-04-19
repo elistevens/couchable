@@ -237,7 +237,7 @@ class TestCouchable(unittest.TestCase):
     def test_1_connection_30_timing(self):
         n = 10
         n = 1
-        
+
         t0 = time.time()
         cdb_list = [couchable.CouchableDb('testing_couchable_' + str(i)) for i in range(n)]
         t1 = time.time()

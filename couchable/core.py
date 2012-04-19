@@ -215,6 +215,7 @@ class CouchableDb(object):
 
         self.url = self.db.resource.url
         self.server_url, self.name = self.url.rstrip('/').rsplit('/', 1)
+        self.server = couchdb.Server(self.server_url)
 
         if not exists:
             try:
