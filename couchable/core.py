@@ -57,9 +57,9 @@ import weakref
 import couchdb
 import couchdb.client
 import couchdb.design
+import couchdb.http
 import couchdb.json
 import couchdb.multipart
-#import couchdb.mapping
 
 """
 """
@@ -187,7 +187,7 @@ class CouchableDb(object):
     _obj_by_id_cache = weakref.WeakValueDictionary()
     _cls2srcMd5sum_dict = {}
 
-    def __init__(self, url=None, name=None, db=None):
+    def __init__(self, url=None, db=None, exists=None):
         """
         Creates a CouchableDb wrapper around a couchdb.Database object.  If
         the database does not yet exist, it will be created.
@@ -201,54 +201,64 @@ class CouchableDb(object):
         """
 
         if db is not None:
-            server_url, name = db.resource.url.rstrip('/').rsplit('/', 1)
-        elif name is None:
-            if '/' in url:
-                server_url, name = url.rstrip('/').rsplit('/', 1)
-            else:
-                name = url
-                server_url = 'http://localhost:5984/'
+            assert url is None
+
+            #server_url, name = db.resource.url.rstrip('/').rsplit('/', 1)
+            self.db = db
         else:
-            server_url = url
-        url = server_url + '/' + name
+            assert url is not None
+
+            if '/' not in url:
+                url = 'http://localhost:5984/' + url
+
+            self.db = couchdb.Database(url)
+
+        self.url = self.db.resource.url
+        self.server_url, self.name = self.url.rstrip('/').rsplit('/', 1)
+
+        if not exists:
+            try:
+                self.db.info()
+            except couchdb.http.ResourceNotFound:
+                couchdb.Server(self.server_url).create(self.name)
+
 
         # This dance is odd due to the semantics of how WVD works.
         cache_key = url
         self._obj_by_id = self._obj_by_id_cache.get(cache_key, weakref.WeakValueDictionary())
         self._obj_by_id_cache[cache_key] = self._obj_by_id
 
-        self.url = url
-        self.server_url = server_url
-        self.name = name
-
-        #print self.url, self.server_url, self.name
-
-
-        if db is None:
-            self.server = couchdb.Server(self.server_url)
-
-            try:
-                db = self.server[self.name]
-            except:
-                log_api.warn("Creating DB: {}".format(self.url))
-                db = self.server.create(self.name)
-
-        self.db = db
+        #self.url = url
+        #self.name = name
+        #
+        ##print self.url, self.server_url, self.name
+        #
+        #
+        #if db is None:
+        #    self.server = couchdb.Server(self.server_url)
+        #
+        #    try:
+        #        db = self.server[self.name]
+        #    except:
+        #        log_api.warn("Creating DB: {}".format(self.url))
+        #        db = self.server.create(self.name)
+        #
+        #self.db = db
 
         self._maxStrLen = 1024
 
-        self._init_views()
-
-    def _init_views(self):
-        byclass_js = '''
-            function(doc) {
-                if ('couchable:' in doc) {
-                    var info = doc['couchable:'];
-                    emit([info.module, info.class, doc._id], null);
-                }
-            }'''
-
-        couchdb.design.ViewDefinition('couchable', 'byclass', byclass_js).sync(self.db)
+        #self._init_views()
+        #
+    #def _init_views(self):
+    #    byclass_js = '''
+    #        function(doc) {
+    #            if ('couchable:' in doc) {
+    #                var info = doc['couchable:'];
+    #                emit([info.module, info.class, doc._id], null);
+    #            }
+    #        }'''
+    #
+    #    couchdb.design.ViewDefinition('couchable', 'byclass', byclass_js).sync(self.db)
 
     def addClassView(self, cls, name, keys=None, multikeys=None, value='1', reduce=None):
         """
@@ -305,9 +315,9 @@ class CouchableDb(object):
 
         return fullName
 
-    #@deprecated
-    def loadInstances(self, cls):
-        return self.load(self.db.view('couchable/byclass', include_docs=True, startkey=[cls.__module__, cls.__name__], endkey=[cls.__module__, cls.__name__, {}]).rows)
+    ##@deprecated
+    #def loadInstances(self, cls):
+    #    return self.load(self.db.view('couchable/byclass', include_docs=True, startkey=[cls.__module__, cls.__name__], endkey=[cls.__module__, cls.__name__, {}]).rows)
 
     def __deepcopy__(self, memo):
         return copy.copy(self)

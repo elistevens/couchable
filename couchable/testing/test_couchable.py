@@ -171,6 +171,113 @@ class TestCouchable(unittest.TestCase):
                 optionflags=(doctest.REPORT_CDIFF | doctest.NORMALIZE_WHITESPACE | doctest.ELLIPSIS))[0], 0)
 
     @attr('couchable')
+    def test_1_connection_10(self):
+        cdb = None
+        try:
+            cdb = couchable.CouchableDb('http://localhost:5984/testing_couchable')
+        finally:
+            if cdb:
+                del couchdb.Server(cdb.server_url)[cdb.name]
+
+    #@attr('couchable')
+    #def test_1_connection_11(self):
+    #    cdb = None
+    #    try:
+    #        cdb = couchable.CouchableDb('http://localhost:5984', 'testing_couchable')
+    #    finally:
+    #        if cdb:
+    #            del couchdb.Server(cdb.server_url)[cdb.name]
+
+    @attr('couchable')
+    def test_1_connection_12(self):
+        cdb = None
+        try:
+            cdb = couchable.CouchableDb('testing_couchable')
+        finally:
+            if cdb:
+                del couchdb.Server(cdb.server_url)[cdb.name]
+
+    @attr('couchable')
+    def test_1_connection_13(self):
+        cdb = None
+        try:
+            cdb = couchable.CouchableDb(db=self.cdb.db)
+        finally:
+            if cdb:
+                del couchdb.Server(cdb.server_url)[cdb.name]
+
+    @attr('couchable')
+    def test_1_connection_20(self):
+        cdb = None
+        try:
+            cdb = couchable.CouchableDb('http://localhost:5984/testing_couchable_xxx')
+        finally:
+            if cdb:
+                del couchdb.Server(cdb.server_url)[cdb.name]
+
+    #@attr('couchable')
+    #def test_1_connection_21(self):
+    #    cdb = None
+    #    try:
+    #        cdb = couchable.CouchableDb('http://localhost:5984', 'testing_couchable_xxx')
+    #    finally:
+    #        if cdb:
+    #            del couchdb.Server(cdb.server_url)[cdb.name]
+
+    @attr('couchable')
+    def test_1_connection_22(self):
+        cdb = None
+        try:
+            cdb = couchable.CouchableDb('testing_couchable_xxx')
+        finally:
+            if cdb:
+                del couchdb.Server(cdb.server_url)[cdb.name]
+
+    @attr('couchable')
+    def test_1_connection_30_timing(self):
+        n = 10
+        n = 1
+        
+        t0 = time.time()
+        cdb_list = [couchable.CouchableDb('testing_couchable_' + str(i)) for i in range(n)]
+        t1 = time.time()
+
+        print 'first', t1-t0
+
+        for cdb in cdb_list:
+            del couchdb.Server(cdb.server_url)[cdb.name]
+
+        cdb_list = []
+        gc.collect()
+
+        t0 = time.time()
+        cdb_list = [couchable.CouchableDb('testing_couchable_' + str(i)) for i in range(n)]
+        t1 = time.time()
+
+        print 'create', t1-t0
+
+        cdb_list = []
+        gc.collect()
+
+        t0 = time.time()
+        cdb_list = [couchable.CouchableDb('testing_couchable_' + str(i)) for i in range(n)]
+        t1 = time.time()
+
+        print 'exists', t1-t0
+
+        t0 = time.time()
+        cdb_list = [couchable.CouchableDb('testing_couchable_' + str(i), exists=True) for i in range(n)]
+        t1 = time.time()
+
+        print 'exists w/ flag', t1-t0
+
+        for cdb in cdb_list:
+            del couchdb.Server(cdb.server_url)[cdb.name]
+
+        #assert False
+
+
+    @attr('couchable')
     def test_2_baseTypeSubclasses_1(self):
         obj = Simple(d=DictSubclass(a=1, b=2), l=ListSubclass([1,2,3]))
 
@@ -743,7 +850,7 @@ class TestCouchable(unittest.TestCase):
         c = SimpleDoc(name='CCC', attach=SimpleAttachment(c=1, cc=2), bb=b)
         a = SimpleDoc(name='AAA', attach=SimpleAttachment(a=1, aa=2), bb=b,
                 dt=datetime.datetime.now(),
-                td=datetime.timedelta(seconds=0.5),
+                td=datetime.timedelta(seconds=1.5),
                 regex=re.compile('[a-z]+'),
             )
 
@@ -776,7 +883,7 @@ class TestCouchable(unittest.TestCase):
 
         self.assertLess(a.dt, datetime.datetime.now())
         self.assertGreater(a.dt + a.td, datetime.datetime.now())
-        time.sleep(1)
+        time.sleep(2)
         self.assertLess(a.dt + a.td, datetime.datetime.now())
 
         self.assertTrue(a.regex.match('abcd'))
@@ -788,7 +895,7 @@ class TestCouchable(unittest.TestCase):
         c = AftermarketDoc(name='CCC', attach=AftermarketAttachment(c=1, cc=2), bb=b)
         a = AftermarketDoc(name='AAA', attach=AftermarketAttachment(a=1, aa=2), bb=b,
                 dt=datetime.datetime.now(),
-                td=datetime.timedelta(seconds=0.5),
+                td=datetime.timedelta(seconds=1.5),
                 regex=re.compile('[a-z]+'),
             )
 
@@ -821,7 +928,7 @@ class TestCouchable(unittest.TestCase):
 
         self.assertLess(a.dt, datetime.datetime.now())
         self.assertGreater(a.dt + a.td, datetime.datetime.now())
-        time.sleep(1)
+        time.sleep(2)
         self.assertLess(a.dt + a.td, datetime.datetime.now())
 
         self.assertTrue(a.regex.match('abcd'))
