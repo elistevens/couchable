@@ -61,6 +61,7 @@ class TestCouchdb(unittest.TestCase):
 
         self.assertEqual(e['long'], l)
 
+    @unittest.skip('''Dealing with this at the couchable layer.''')
     def test_2_nullStrings(self):
         s = '\x00123456789'
         d = {'s': s}

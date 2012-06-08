@@ -464,6 +464,7 @@ class CouchableDb(object):
             obj._id = data_dict['id']
             obj._rev = data_dict['rev']
 
+            self._obj_by_id[obj._id] = obj
 
         #print 'hitting bulk docs:', [x for x in [str(bulk_tup[1].get('_id', None)) for bulk_tup in bulk_list] if 'CoordinateSystem' not in x]
         ret_list = self.db.update([bulk_tup[1] for bulk_tup in bulk_list])
@@ -477,6 +478,10 @@ class CouchableDb(object):
             else:
                 obj._rev = _rev
                 self._obj_by_id[obj._id] = obj
+                print "self._obj_by_id[obj._id] = obj", self._obj_by_id.items()
+                #log_internal.error("self._obj_by_id[obj._id] = obj")
+        #log_internal.error("outside for")
+        print "outside for", self._obj_by_id.items(), store_list
 
         del self._done_dict
         del self._cycle_set
@@ -739,8 +744,7 @@ class CouchableDb(object):
                 #print "Found some high bytes:", data.encode('hex_codec')
                 highBytes = True
 
-
-        if highBytes or len(data) > self._maxStrLen:
+        if '\0' in data or highBytes or len(data) > self._maxStrLen:
             #return '{}{}:{}:{}'.format(FIELD_NAME, 'repr', typestr(data), data.encode('hex_codec'))
             return self._pack_pickle(parent_doc, data, attachment_dict, name, isKey)
 

@@ -278,7 +278,143 @@ class TestCouchable(unittest.TestCase):
 
 
     @attr('couchable')
-    def test_2_baseTypeSubclasses_1(self):
+    def test_1_simple(self):
+        obj = Simple(**self.simple_dict)
+
+        _id = self.cdb.store(obj)
+
+        del obj
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
+
+        obj = self.cdb.load(_id)
+
+        self.assertEqual(obj.__class__, Simple)
+        for key, value in self.simple_dict.items():
+            self.assertEqual(getattr(obj, key), value)
+
+    @attr('couchable', 'elis')
+    def test_10_objectCache(self):
+        obj = Simple(**self.simple_dict)
+
+        _id = self.cdb.store(obj)
+
+        self.assertTrue(self.cdb._obj_by_id_cache)
+        self.assertTrue(self.cdb._obj_by_id_cache[self.cdb.url])
+        self.assertTrue(self.cdb._obj_by_id)
+        self.assertIs(self.cdb._obj_by_id_cache[self.cdb.url], self.cdb._obj_by_id)
+
+
+        self.assertIn(_id, self.cdb._obj_by_id_cache[self.cdb.url])
+        self.assertIn(_id, self.cdb._obj_by_id)
+
+        del obj
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id))
+
+        obj = self.cdb.load(_id)
+
+        self.assertIn(_id, self.cdb._obj_by_id_cache[self.cdb.url])
+
+        obj2 = self.cdb.load(_id)
+
+        self.assertEqual(id(obj), id(obj2))
+        self.assertEqual(obj._id, obj2._id)
+        self.assertTrue(self.cdb._obj_by_id_cache)
+        self.assertTrue(self.cdb._obj_by_id_cache[self.cdb.url])
+
+        self.assertEqual(obj.__class__, Simple)
+        for key, value in self.simple_dict.items():
+            self.assertEqual(getattr(obj, key), value)
+
+    @attr('couchable')
+    def test_20_nullStrings(self):
+        s = '\x00foo'
+        obj = Simple(s=s)
+
+        _id = self.cdb.store(obj)
+
+        del obj
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
+
+        obj = self.cdb.load(_id)
+
+        self.assertEquals(obj.s, s)
+        #assert False
+
+    @attr('couchable')
+    def test_21_binaryStrings_1(self):
+        s = 'abc\xaa\xbb\xcc this is the tricky part: \\xddd'
+        obj = Simple(s=s)
+
+        _id = self.cdb.store(obj)
+
+        del obj
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
+
+        obj = self.cdb.load(_id)
+
+        self.assertEquals(obj.s, s)
+
+    @attr('couchable')
+    def test_21_binaryStrings_2(self):
+        #s = 'abc\xaa\xbb\xcc this is the tricky part: \\xddd'
+        s = ''.join([chr(x) for x in range(256)])
+        obj = Simple(s=s)
+
+        _id = self.cdb.store(obj)
+
+        del obj
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
+
+        obj = self.cdb.load(_id)
+
+        self.assertEquals(obj.s, s)
+
+    @attr('couchable')
+    def test_21_binaryStrings_3(self):
+        #s = 'abc\xaa\xbb\xcc this is the tricky part: \\xddd'
+        s = ''.join([chr(x) for x in range(127)])
+        obj = Simple(s=s)
+
+        _id = self.cdb.store(obj)
+
+        del obj
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
+        obj = self.cdb.load(_id)
+
+        self.assertEquals(obj.s, s)
+
+    @attr('couchable')
+    def test_21_binaryStrings_4(self):
+        #s = 'abc\xaa\xbb\xcc this is the tricky part: \\xddd'
+        s = ''.join([chr(x) for x in range(1, 127)])
+        obj = Simple(s=s)
+
+        _id = self.cdb.store(obj)
+
+        del obj
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
+        obj = self.cdb.load(_id)
+
+        self.assertEquals(obj.s, s)
+
+
+
+
+    @attr('couchable')
+    def test_22_baseTypeSubclasses_1(self):
         obj = Simple(d=DictSubclass(a=1, b=2), l=ListSubclass([1,2,3]))
 
         _id = self.cdb.store(obj)
@@ -294,7 +430,7 @@ class TestCouchable(unittest.TestCase):
         self.assertEqual(type(obj.l), ListSubclass)
 
     @attr('couchable')
-    def test_2_baseTypeSubclasses_2(self):
+    def test_22_baseTypeSubclasses_2(self):
         obj = DictSubclass(d=DictSubclass(a=1, b=2), l=ListSubclass([DictSubclass(e=5, f=6),1,2,3]))
         obj.x = 4
 
@@ -322,90 +458,6 @@ class TestCouchable(unittest.TestCase):
         #assert False
 
     @attr('couchable')
-    def test_2_binaryStrings_1(self):
-        s = 'abc\xaa\xbb\xcc this is the tricky part: \\xddd'
-        obj = Simple(s=s)
-
-        _id = self.cdb.store(obj)
-
-        del obj
-        gc.collect()
-        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
-
-
-        obj = self.cdb.load(_id)
-
-        self.assertEquals(obj.s, s)
-
-    @attr('couchable')
-    def test_2_binaryStrings_2(self):
-        #s = 'abc\xaa\xbb\xcc this is the tricky part: \\xddd'
-        s = ''.join([chr(x) for x in range(256)])
-        obj = Simple(s=s)
-
-        _id = self.cdb.store(obj)
-
-        del obj
-        gc.collect()
-        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
-
-
-        obj = self.cdb.load(_id)
-
-        self.assertEquals(obj.s, s)
-
-    @attr('couchable')
-    def test_2_binaryStrings_3(self):
-        #s = 'abc\xaa\xbb\xcc this is the tricky part: \\xddd'
-        s = ''.join([chr(x) for x in range(127)])
-        obj = Simple(s=s)
-
-        _id = self.cdb.store(obj)
-
-        del obj
-        gc.collect()
-        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
-
-
-        obj = self.cdb.load(_id)
-
-        self.assertEquals(obj.s, s)
-
-    @attr('couchable')
-    def test_2_nullStrings(self):
-        s = '\x00abc\xaa\xbb\xcc this is the tricky part: \\xddd'
-        obj = Simple(s=s)
-
-        _id = self.cdb.store(obj)
-
-        del obj
-        gc.collect()
-        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
-
-
-        obj = self.cdb.load(_id)
-
-        self.assertEquals(obj.s, s)
-
-
-    @attr('couchable')
-    def test_1_simple(self):
-        obj = Simple(**self.simple_dict)
-
-        _id = self.cdb.store(obj)
-
-        del obj
-        gc.collect()
-        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
-
-
-        obj = self.cdb.load(_id)
-
-        self.assertEqual(obj.__class__, Simple)
-        for key, value in self.simple_dict.items():
-            self.assertEqual(getattr(obj, key), value)
-
-    @attr('couchable')
     def test_3_namedtuple(self):
         obj = Simple(abc=NamedTupleABC(1,2,3), ts=TupleSubclass([1,2,3,4,5]))
 
@@ -428,7 +480,7 @@ class TestCouchable(unittest.TestCase):
     def test_31_odict0_json(self):
         limit = sys.getrecursionlimit()
         try:
-            sys.setrecursionlimit(100)
+            sys.setrecursionlimit(200)
 
 
             kv_list = [(chr(ord('a') + i), i) for i in range(3)]
@@ -456,7 +508,7 @@ class TestCouchable(unittest.TestCase):
     def test_31_odict1_obj(self):
         limit = sys.getrecursionlimit()
         try:
-            sys.setrecursionlimit(100)
+            sys.setrecursionlimit(200)
 
 
             kv_list = [(chr(ord('a') + i), i) for i in range(3)]
@@ -519,7 +571,7 @@ class TestCouchable(unittest.TestCase):
     def test_31_odict3_pickle(self):
         limit = sys.getrecursionlimit()
         try:
-            sys.setrecursionlimit(100)
+            sys.setrecursionlimit(200)
 
 
             kv_list = [(chr(ord('a') + i), i) for i in range(10)]
@@ -548,7 +600,7 @@ class TestCouchable(unittest.TestCase):
     def test_31_odict9_all(self):
         limit = sys.getrecursionlimit()
         try:
-            sys.setrecursionlimit(100)
+            sys.setrecursionlimit(200)
 
 
             kv_list = [(chr(ord('a') + i), i) for i in range(10)]
@@ -944,7 +996,7 @@ class TestCouchable(unittest.TestCase):
         limit = sys.getrecursionlimit()
         try:
             # This number might need to get tweaked if this test is failing; that's fine
-            sys.setrecursionlimit(100)
+            sys.setrecursionlimit(200)
 
             a = SimpleDoc(name='AAA')
             b = SimpleDoc(name='BBB', a=a)
