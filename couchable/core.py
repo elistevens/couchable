@@ -478,10 +478,10 @@ class CouchableDb(object):
             else:
                 obj._rev = _rev
                 self._obj_by_id[obj._id] = obj
-                print "self._obj_by_id[obj._id] = obj", self._obj_by_id.items()
+                #print "self._obj_by_id[obj._id] = obj", self._obj_by_id.items()
                 #log_internal.error("self._obj_by_id[obj._id] = obj")
         #log_internal.error("outside for")
-        print "outside for", self._obj_by_id.items(), store_list
+        #print "outside for", self._obj_by_id.items(), store_list
 
         del self._done_dict
         del self._cycle_set
