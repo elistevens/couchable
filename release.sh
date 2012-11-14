@@ -17,7 +17,7 @@ then
     python setup.py nosetests \
     && git tag $VER \
     && sed -i '' -e "s/version='.*'/version='$VER'/" setup.py \
-    && python setup.py bdist_egg $UPLOAD \
+    && python setup.py bdist_egg sdist $UPLOAD \
     && git commit -am "v$VER" \
     && git push github \
     && git push --tags github
