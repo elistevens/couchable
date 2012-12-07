@@ -467,7 +467,13 @@ class CouchableDb(object):
             self._obj_by_id[obj._id] = obj
 
         #print 'hitting bulk docs:', [x for x in [str(bulk_tup[1].get('_id', None)) for bulk_tup in bulk_list] if 'CoordinateSystem' not in x]
-        ret_list = self.db.update([bulk_tup[1] for bulk_tup in bulk_list])
+        try:
+            ret_list = self.db.update([bulk_tup[1] for bulk_tup in bulk_list])
+        except UnicodeDecodeError as e:
+            for bulk_obj, bulk_doc in bulk_list:
+                for s in findBadJson(bulk_doc, bulk_obj._id):
+                    log_api.error("Bad json: {}".format(s))
+            raise
 
         #print ret_list
         for (success, _id, _rev), (obj, doc) in itertools.izip(ret_list, bulk_list):
@@ -537,7 +543,7 @@ class CouchableDb(object):
         #    log_internal.error(name)
         #    raise
         except Exception, e:
-            log_internal.error('{}, {} in {}, {} isKey: {}'.format(name, cls, base_cls, handler, isKey))
+            log_internal.error('{}, {} in base_cls {}, handler {} isKey: {}'.format(name, cls, base_cls, handler, isKey))
             raise
 
         #if handler:
@@ -922,9 +928,22 @@ class CouchableDb(object):
         else:
             private_keys = set()
 
-        doc = {self._pack(parent_doc, k, attachment_dict, '{}>{}'.format(name, str(k)), True):
-            self._pack(parent_doc, v, attachment_dict, nameFormat_str.format(name, str(k)), False)
-            for k,v in data.items() if k not in private_keys and k not in set(['_attachments', '_cdb'])}
+        doc = {}
+        for k,v in data.items():
+            if k not in private_keys and k not in set(['_attachments', '_cdb']):
+                if isObjDict:
+                    k_str = str(k)
+                else:
+                    k_str = repr(k)
+
+                k_packed = self._pack(parent_doc, k, attachment_dict, '{}>{}'.format(name, k_str), True)
+                v_packed = self._pack(parent_doc, v, attachment_dict, nameFormat_str.format(name, k_str), False)
+
+                doc[k_packed] = v_packed
+
+        #doc = {self._pack(parent_doc, k, attachment_dict, '{}>{}'.format(name, str(k)), True):
+        #    self._pack(parent_doc, v, attachment_dict, nameFormat_str.format(name, str(k)), False)
+        #    for k,v in data.items() if k not in private_keys and k not in set(['_attachments', '_cdb'])}
 
         #assert '_attachments' not in doc, ', '.join([str(data), str(isObjDict)])
 
@@ -1444,5 +1463,32 @@ def registerNoneType(type_):
 
     _pack_handlers[type_] = handler
     _pack_handlers[typestr(type_)] = handler
+
+
+def findBadJson(obj, prefix=''):
+    bad_list = []
+    if isinstance(obj, (list, tuple)):
+        for i, v in enumerate(obj):
+            bad_list.extend(findBadJson(v, '{}[{}]'.format(prefix, i)))
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            if isinstance(k, (str, int, float)):
+                bad_list.extend(findBadJson(v, '{}[{!r}]'.format(prefix, k)))
+            else:
+                bad_list.append('{} key {}'.format(prefix, k))
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            bad_list.append('{} value {}, {}'.format(prefix, obj, type(obj)))
+    elif isinstance(obj, str):
+        try:
+            obj.encode('ascii')
+        except:
+            bad_list.append('{} not ascii {}, {}'.format(prefix, obj, type(obj)))
+    elif isinstance(obj, (int, unicode)):
+        pass
+    else:
+        bad_list.append('{} type {}, {}'.format(prefix, obj, type(obj)))
+
+    return bad_list
 
 # eof

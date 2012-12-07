@@ -410,6 +410,22 @@ class TestCouchable(unittest.TestCase):
 
         self.assertEquals(obj.s, s)
 
+    @attr('couchable')
+    def test_21_binaryStrings_5(self):
+        s = 'abc\xaa\xbb\xcc this is the tricky part: \\xddd'
+        obj = Simple(d={s: s})
+
+        _id = self.cdb.store(obj)
+
+        del obj
+        gc.collect()
+        self.assertFalse(self.cdb._obj_by_id, repr(self.cdb._obj_by_id.items()))
+
+
+        obj = self.cdb.load(_id)
+
+        self.assertEquals(obj.d[s], s)
+
 
 
 
