@@ -328,6 +328,12 @@ class CouchableDb(object):
         assert _id == doc['_id']
         return doc
 
+    def __setitem__(self, _id, value):
+        self.db[_id] = value
+
+    def __delitem__(self, _id):
+        del self.db[_id]
+
     #    cls = type(self)
     #    inst = cls.__new__(cls)
     #    inst.__dict__.update({copy.deepcopy(k): copy.deepcopy(v) for k,v in self.__dict__.items if k not in ['_cdb']})

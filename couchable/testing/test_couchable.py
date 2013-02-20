@@ -303,6 +303,25 @@ class TestCouchable(unittest.TestCase):
 
         self.assertEqual(self.cdb[_id], self.cdb.db[_id])
 
+    @attr('couchable')
+    def test_10_setitem(self):
+        doc = {'foo': 'foo'}
+        _id = 'bar'
+
+        self.cdb[_id] = doc
+
+        self.assertIn(_id, self.cdb.db)
+
+    @attr('couchable')
+    def test_10_delitem(self):
+        obj = Simple(**self.simple_dict)
+
+        _id = self.cdb.store(obj)
+
+        del self.cdb[_id]
+
+        self.assertNotIn(_id, self.cdb.db)
+
 
     @attr('couchable')
     def test_10_objectCache(self):
