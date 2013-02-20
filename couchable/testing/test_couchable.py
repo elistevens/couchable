@@ -294,7 +294,17 @@ class TestCouchable(unittest.TestCase):
         for key, value in self.simple_dict.items():
             self.assertEqual(getattr(obj, key), value)
 
-    @attr('couchable', 'elis')
+    @attr('elis')
+    @attr('couchable')
+    def test_10_getitem(self):
+        obj = Simple(**self.simple_dict)
+
+        _id = self.cdb.store(obj)
+
+        self.assertEqual(self.cdb[_id], self.cdb.db[_id])
+
+
+    @attr('couchable')
     def test_10_objectCache(self):
         obj = Simple(**self.simple_dict)
 
@@ -736,7 +746,7 @@ class TestCouchable(unittest.TestCase):
 
         #assert False
 
-    @attr('couchable', 'elis')
+    @attr('couchable')
     def test_40_tuple_pickles(self):
         pk = SimplePickle(a=1, b=2, c=3)
 

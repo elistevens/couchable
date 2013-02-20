@@ -323,6 +323,11 @@ class CouchableDb(object):
     def __deepcopy__(self, memo):
         return copy.copy(self)
 
+    def __getitem__(self, _id):
+        doc = self.db[_id]
+        assert _id == doc['_id']
+        return doc
+
     #    cls = type(self)
     #    inst = cls.__new__(cls)
     #    inst.__dict__.update({copy.deepcopy(k): copy.deepcopy(v) for k,v in self.__dict__.items if k not in ['_cdb']})
@@ -1150,8 +1155,12 @@ class CouchableDb(object):
 
         if isinstance(loaded, list):
             loaded_dict = {(x.id if isinstance(x, couchdb.client.Row) else x['_id']): (x.doc if isinstance(x, couchdb.client.Row) else x) for x in loaded}
+        elif isinstance(loaded, dict):
+            loaded_dict = loaded
+        elif loaded == None:
+            loaded_dict = {}
         else:
-            loaded_dict = loaded or {}
+            raise TypeError("'loaded' must be list, dict, or not specified.")
 
         #if not isinstance(what, (list, couchdb.client.ViewResults)):
         if not isinstance(what, list):
@@ -1196,6 +1205,7 @@ class CouchableDb(object):
 
 
         for row in self.db.view('_all_docs', include_docs=True, keys=todo_list).rows:
+            assert row.id == row.doc['_id']
             loaded_dict[row.id] = row.doc
 
         if not isinstance(what, list):
@@ -1210,7 +1220,9 @@ class CouchableDb(object):
         if _id not in loaded_dict:
             log_internal.debug("Fetching object from DB: {}".format(_id))
             try:
-                loaded_dict[_id] = self.db[_id]
+                doc = self.db[_id]
+                assert _id == doc['_id']
+                loaded_dict[_id] = doc
             except:
                 log_internal.exception("Error fetching id: {}".format(_id))
                 raise
