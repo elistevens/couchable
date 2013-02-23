@@ -200,6 +200,9 @@ class CouchableDb(object):
         @param db: An instance of couchdb.Database that has already been instantiated.  Overrides the name and url params.
         """
 
+        self._db_pid = None
+        self._db = None
+
         if db is not None:
             assert url is None
 
@@ -319,6 +322,18 @@ class CouchableDb(object):
     ##@deprecated
     #def loadInstances(self, cls):
     #    return self.load(self.db.view('couchable/byclass', include_docs=True, startkey=[cls.__module__, cls.__name__], endkey=[cls.__module__, cls.__name__, {}]).rows)
+
+    @property
+    def db(self):
+        if self._db_pid != os.getpid():
+            self.db = couchdb.Database(self.url)
+
+        return self._db
+
+    @db.setter
+    def db(self, value):
+        self._db_pid = os.getpid()
+        self._db = value
 
     def __deepcopy__(self, memo):
         return copy.copy(self)
