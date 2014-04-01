@@ -8,5 +8,7 @@ python:
 install:
   - pip install simplejson CouchDB
   - pip install .
+services:
+  - couchdb
 # command to run tests
 script: python setup.py nosetests
