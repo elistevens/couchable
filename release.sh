@@ -19,8 +19,8 @@ then
     && sed -i '' -e "s/version='.*'/version='$VER'/" setup.py \
     && python setup.py bdist_egg sdist $UPLOAD \
     && git commit -am "v$VER" \
-    && git push github \
-    && git push --tags github
+    && git push origin \
+    && git push --tags origin
 
 else
     echo Uncommitted changes.

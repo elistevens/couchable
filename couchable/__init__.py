@@ -44,7 +44,7 @@ From the README.txt:
 from core import CouchableDb
 from core import registerDocType, CouchableDoc
 from core import registerAttachmentType, CouchableAttachment
-from core import registerPickleType, registerNoneType
+from core import registerPickleType, registerNoneType, registerUncouchableType
 from core import custom_packer
 from core import doGzip, doGunzip
 from core import newid

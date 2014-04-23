@@ -1,0 +1,14 @@
+language: python
+python:
+  - "2.7"
+  # does not have headers provided, please ask https://launchpad.net/~pypy/+archive/ppa
+  # maintainers to fix their pypy-dev package.
+#  - "pypy"
+# command to install dependencies
+install:
+  - pip install simplejson CouchDB
+  - pip install .
+services:
+  - couchdb
+# command to run tests
+script: python setup.py nosetests

@@ -427,7 +427,7 @@ class CouchableDb(object):
                 if 'pickles' in attachment_dict:
                     content_tup = attachment_dict['pickles']
 
-                    content = doGzip(pickle.dumps(content_tup, pickle.HIGHEST_PROTOCOL))
+                    content = doGzip(doPickle(content_tup))
                     content_type = 'application/pickle'
 
                     attachment_dict['pickles'] = (content, content_type)
@@ -527,6 +527,8 @@ class CouchableDb(object):
 
 
     def _store(self, obj):
+        log_internal.debug("_store {}: {} @ {}".format(type(obj), getattr(obj, '_id', None), getattr(obj, '_rev', None)))
+
         if isinstance(obj, (CouchableDb, couchdb.client.Server, couchdb.client.Database)):
             raise UncouchableException("Illegal to attempt to store objects of type", type(obj), obj)
 
@@ -561,6 +563,9 @@ class CouchableDb(object):
 
         base_cls, handler = findHandler(cls, _pack_handlers)
 
+        #if '_pack_native' not in repr(handler):
+        #    log_internal.debug("_pack {}: {} @ {}, {} {}".format(type(data), getattr(data, '_id', None), getattr(data, '_rev', None), base_cls, handler))
+
         try:
             #print "Calling _pack: {}".format((data, attachment_dict, name))
             #print ''.join(traceback.format_stack())
@@ -571,6 +576,9 @@ class CouchableDb(object):
         except Exception, e:
             log_internal.error('{}, {} in base_cls {}, handler {} isKey: {}'.format(name, cls, base_cls, handler, isKey))
             raise
+        #finally:
+        #    log_internal.debug("_pack finished {}: {} @ {}".format(type(data), getattr(data, '_id', None), getattr(data, '_rev', None)))
+
 
         #if handler:
         #    try:
@@ -669,6 +677,7 @@ class CouchableDb(object):
                 'kwargs': {},
                 'module': '__builtin__'}}}}}
         """
+        log_internal.info("{}: {} @ {}, {}".format(type(data), getattr(data, '_id', None), getattr(data, '_rev', None), name))
         assert not (isKey and topLevel)
 
         cls = type(data)
@@ -735,6 +744,7 @@ class CouchableDb(object):
         >>> cdb._pack_module(parent_doc, data, attachment_dict, 'myname', True)
         'couchable:module:os.path'
         """
+        #log_internal.debug("{}: {} @ {}, {}".format(type(data), getattr(data, '_id', None), getattr(data, '_rev', None), name))
 
         for name, module in sys.modules.items():
             if module == data:
@@ -764,6 +774,7 @@ class CouchableDb(object):
         >>> cdb._pack_native(parent_doc, data, attachment_dict, 'myname', False)
         'couchable:append:str:couchable:must escape this'
         """
+        #log_internal.debug("{}: {} @ {}, {}".format(type(data), getattr(data, '_id', None), getattr(data, '_rev', None), name))
         #if len(data) > 1024:
         #    return self._pack_attachment(parent_doc, data, attachment_dict, name, isKey)
 
@@ -771,8 +782,11 @@ class CouchableDb(object):
 
         if isinstance(data, str):
             try:
-                data.encode('ascii')
+                data.decode('utf8')
+                # This means that it's either clean ascii, or encoded as utf8,
+                # as god intended.  We can work with it.
             except:
+                # Otherwise it's latin1 or binary or who knows what.  Pickles.
                 #print "Found some high bytes:", data.encode('hex_codec')
                 highBytes = True
 
@@ -781,7 +795,7 @@ class CouchableDb(object):
             return self._pack_pickle(parent_doc, data, attachment_dict, name, isKey)
 
         elif data.startswith(FIELD_NAME):
-            return '{}{}:{}:{}'.format(FIELD_NAME, 'append', typestr(data), data)
+            return u'{}{}:{}:{}'.format(FIELD_NAME, 'append', typestr(data), data)
         else:
             return data
 
@@ -802,6 +816,7 @@ class CouchableDb(object):
         >>> cdb._pack_native_keyAsRepr(parent_doc, data, attachment_dict, 'myname', True)
         'couchable:repr:float:12.34'
         """
+        #log_internal.debug("{}: {} @ {}, {}".format(type(data), getattr(data, '_id', None), getattr(data, '_rev', None), name))
         if isKey:
             return '{}{}:{}:{!r}'.format(FIELD_NAME, 'repr', typestr(data), data)
         else:
@@ -851,6 +866,7 @@ class CouchableDb(object):
                 'kwargs': {},
                 'module': '__builtin__'}}}}}
         """
+        #log_internal.debug("{}: {} @ {}, {}".format(type(data), getattr(data, '_id', None), getattr(data, '_rev', None), name))
         if isKey:
             key_str = '{}{}:{}:{!r}'.format(FIELD_NAME, 'key', typestr(data), data)
 
@@ -890,6 +906,7 @@ class CouchableDb(object):
         >>> pprint.pprint(parent_doc)
         {}
         """
+        #log_internal.debug("{}: {} @ {}, {}".format(type(data), getattr(data, '_id', None), getattr(data, '_rev', None), name))
         assert not isKey
         if type(data) is not list:
             #assert not isObjDict
@@ -927,6 +944,7 @@ class CouchableDb(object):
                 'kwargs': {},
                 'module': '__builtin__'}}}}}
         """
+        #log_internal.debug("{}: {} @ {}, {}".format(type(data), getattr(data, '_id', None), getattr(data, '_rev', None), name))
         if type(data) is collections.OrderedDict:
             assert not isObjDict, "{}: {}".format(name, str(type(data)))
 
@@ -990,19 +1008,23 @@ class CouchableDb(object):
         return doc
 
     def _pack_attachment(self, parent_doc, data, attachment_dict, name, isKey):
+        log_internal.debug("{}: {} @ {}, {}".format(type(data), getattr(data, '_id', None), getattr(data, '_rev', None), name))
         cls = type(data)
 
         base_cls, handler_tuple = findHandler(cls, _attachment_handlers)
+        log_internal.debug("{}: {}, {}".format(type(data), base_cls, handler_tuple))
 
         assert base_cls is not None
         assert name not in attachment_dict
 
         content = handler_tuple[0](data)
+        log_internal.debug("{}: content len {}".format(type(data), len(content)))
         attachment_dict[name] = (content, handler_tuple[2])
         return '{}{}:{}:{}'.format(FIELD_NAME, 'attachment', typestr(base_cls), name)
 
     @_packer(type)
     def _pack_pickle(self, parent_doc, data, attachment_dict, name, isKey):
+        log_internal.debug("{}: {} @ {}, {}".format(type(data), getattr(data, '_id', None), getattr(data, '_rev', None), name))
         attachment_dict.setdefault('pickles', {})
 
         assert name not in attachment_dict['pickles']
@@ -1389,6 +1411,8 @@ def doGzip(data, compresslevel=1):
     @rtype: byte string
     @return: The compressed byte string.
     """
+    log_internal.debug("data len {}".format(len(data)))
+
     str_io = cStringIO.StringIO()
     gz_file = gzip.GzipFile(mode='wb', compresslevel=1, fileobj=str_io)
     gz_file.write(data)
@@ -1404,14 +1428,25 @@ def doGunzip(data):
     @rtype: byte string
     @return: The uncompressed byte string.
     """
+    log_internal.debug("data len {}".format(len(data)))
+
     str_io = cStringIO.StringIO(data)
     gz_file = gzip.GzipFile(mode='rb', fileobj=str_io)
     return gz_file.read()
 
+def doPickle(obj):
+    log_internal.debug("obj {}".format(type(obj)))
+    return pickle.dumps(obj, pickle.HIGHEST_PROTOCOL)
+
+def doUnpickle(data):
+    log_internal.debug("data len {}".format(len(data)))
+    return pickle.loads(data)
+
+
 _attachment_handlers = collections.OrderedDict()
 def registerAttachmentType(type_,
-        serialize_func=(lambda obj: pickle.dumps(obj, pickle.HIGHEST_PROTOCOL)),
-        deserialize_func=(lambda data: pickle.loads(data)),
+        serialize_func=doPickle,
+        deserialize_func=doUnpickle,
         content_type='application/octet-stream', gzip=True):
     """
     @type  type_: type
@@ -1493,6 +1528,13 @@ def registerPickleType(type_):
 
 def registerNoneType(type_):
     handler = lambda self, parent_doc, data, attachment_dict, name, isKey: CouchableDb._pack_native_keyAsRepr(self, parent_doc, None, attachment_dict, name, isKey)
+
+    _pack_handlers[type_] = handler
+    _pack_handlers[typestr(type_)] = handler
+
+def registerUncouchableType(type_):
+    def handler(self, parent_doc, data, attachment_dict, name, isKey):
+        raise UncouchableException("Type registered as uncouchable: {} at {}".format(type_, name), type_, data)
 
     _pack_handlers[type_] = handler
     _pack_handlers[typestr(type_)] = handler
