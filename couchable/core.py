@@ -782,8 +782,11 @@ class CouchableDb(object):
 
         if isinstance(data, str):
             try:
-                data.encode('ascii')
+                data.decode('utf8')
+                # This means that it's either clean ascii, or encoded as utf8,
+                # as god intended.  We can work with it.
             except:
+                # Otherwise it's latin1 or binary or who knows what.  Pickles.
                 #print "Found some high bytes:", data.encode('hex_codec')
                 highBytes = True
 
@@ -792,7 +795,7 @@ class CouchableDb(object):
             return self._pack_pickle(parent_doc, data, attachment_dict, name, isKey)
 
         elif data.startswith(FIELD_NAME):
-            return '{}{}:{}:{}'.format(FIELD_NAME, 'append', typestr(data), data)
+            return u'{}{}:{}:{}'.format(FIELD_NAME, 'append', typestr(data), data)
         else:
             return data
 
