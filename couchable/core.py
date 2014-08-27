@@ -187,7 +187,7 @@ class CouchableDb(object):
     _obj_by_id_cache = weakref.WeakValueDictionary()
     _cls2srcMd5sum_dict = {}
 
-    def __init__(self, url=None, db=None, exists=None):
+    def __init__(self, url=None, db=None, exists=None, timeout=None):
         """
         Creates a CouchableDb wrapper around a couchdb.Database object.  If
         the database does not yet exist, it will be created.
@@ -214,7 +214,7 @@ class CouchableDb(object):
             if '/' not in url:
                 url = 'http://localhost:5984/' + url
 
-            self.db = couchdb.Database(url)
+            self.db = couchdb.Database(url, session=couchdb.Session(timeout=timeout))
 
         self.url = self.db.resource.url
         self.server_url, self.name = self.url.rstrip('/').rsplit('/', 1)
@@ -228,7 +228,7 @@ class CouchableDb(object):
 
 
         # This dance is odd due to the semantics of how WVD works.
-        cache_key = url
+        cache_key = self.url
         self._obj_by_id = self._obj_by_id_cache.get(cache_key, weakref.WeakValueDictionary())
         self._obj_by_id_cache[cache_key] = self._obj_by_id
 
