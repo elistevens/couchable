@@ -604,7 +604,7 @@ class CouchableDb(object):
         >>> cdb=CouchableDb('testing')
         >>> obj = object()
         >>> pprint.pprint(cdb._objInfo_doc(obj, {}))
-        {'couchable:': {'class': 'object', 'module': '__builtin__'}}
+        {'couchable:': {'class': 'object', 'module': '__builtin__', 'pid': ..., 'time': ...}}
         """
         cls = type(data)
         doc.setdefault(FIELD_NAME, {})
@@ -633,7 +633,9 @@ class CouchableDb(object):
         {'couchable:': {'args': [1, 2, 3],
                         'class': 'tuple',
                         'kwargs': {},
-                        'module': '__builtin__'}}
+                        'module': '__builtin__',
+                        'pid': ...,
+                        'time': ...}
         """
         doc = self._objInfo_doc(data, doc)
         doc[FIELD_NAME]['args'] = args or []
