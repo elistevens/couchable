@@ -609,6 +609,8 @@ class CouchableDb(object):
         cls = type(data)
         doc.setdefault(FIELD_NAME, {})
         doc[FIELD_NAME]['class'] = cls.__name__
+        doc[FIELD_NAME]['pid'] = os.getpid()
+        doc[FIELD_NAME]['time'] = time.time()
 
         if hasattr(cls, '__module__'):
             doc[FIELD_NAME]['module'] = str(cls.__module__)
@@ -1248,7 +1250,7 @@ class CouchableDb(object):
 
 
         for row in self.db.view('_all_docs', include_docs=True, keys=todo_list).rows:
-            assert row.id == row.doc['_id']
+            assert row.id == row.doc['_id'], "{!r} != {!r}".format(row.id, row.doc['_id'])
             loaded_dict[row.id] = row.doc
 
         if not isinstance(what, list):
