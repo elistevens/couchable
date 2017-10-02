@@ -1410,6 +1410,12 @@ def doGzip(data, compresslevel=1):
     """
     Helper function for compressing byte strings.
 
+    Chunking is due to needing to work on pythons < 2.7.13:
+    - Issue #27130: In the "zlib" module, fix handling of large buffers
+      (typically 2 or 4 GiB).  Previously, inputs were limited to 2 GiB, and
+      compression and decompression operations did not properly handle results of
+      2 or 4 GiB.
+
     @type  data: byte string
     @param data: The data to compress.
     @rtype: byte string
@@ -1419,13 +1425,22 @@ def doGzip(data, compresslevel=1):
 
     str_io = cStringIO.StringIO()
     gz_file = gzip.GzipFile(mode='wb', compresslevel=1, fileobj=str_io)
-    gz_file.write(data)
+
+    for offset in range(0, len(data), 2**30):
+        gz_file.write(data[offset:offset+2**30])
     gz_file.close()
+
     return str_io.getvalue()
 
 def doGunzip(data):
     """
     Helper function for compressing byte strings.
+
+    Chunking is due to needing to work on pythons < 2.7.13:
+    - Issue #27130: In the "zlib" module, fix handling of large buffers
+      (typically 2 or 4 GiB).  Previously, inputs were limited to 2 GiB, and
+      compression and decompression operations did not properly handle results of
+      2 or 4 GiB.
 
     @type  data: byte string
     @param data: The data to uncompress.
@@ -1436,7 +1451,16 @@ def doGunzip(data):
 
     str_io = cStringIO.StringIO(data)
     gz_file = gzip.GzipFile(mode='rb', fileobj=str_io)
-    return gz_file.read()
+    read_csio = cStringIO.StringIO()
+
+    while True:
+        uncompressed_data = gz_file.read(2**30)
+        if uncompressed_data:
+            read_csio.write(uncompressed_data)
+        else:
+            break
+
+    return read_csio.getvalue()
 
 def doPickle(obj):
     log_internal.debug("obj {}".format(type(obj)))
