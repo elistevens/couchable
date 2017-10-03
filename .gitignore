@@ -4,6 +4,7 @@
 *.pyo
 # python .dll-ish stuff
 *.pyd
+.eggs
 
 # cython cruft
 *_c.so
