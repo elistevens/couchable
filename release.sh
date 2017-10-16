@@ -15,11 +15,11 @@ if git diff --quiet HEAD || true
 then
 
     python setup.py nosetests \
-    && git tag $VER \
     && sed -i'' -e "s/version='.*'/version='$VER'/" setup.py \
-    && python setup.py bdist_egg sdist $UPLOAD \
     && git commit -am "v$VER" \
+    && python setup.py bdist_egg sdist $UPLOAD \
     && git push origin \
+    && git tag $VER \
     && git push --tags origin
 
 else

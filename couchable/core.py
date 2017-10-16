@@ -221,10 +221,15 @@ class CouchableDb(object):
         self.server = couchdb.Server(self.server_url)
 
         if not exists:
-            try:
-                self.db.info()
-            except couchdb.http.ResourceNotFound:
-                couchdb.Server(self.server_url).create(self.name)
+            while True:
+                try:
+                    self.db.info()
+                    break
+                except couchdb.http.ResourceNotFound:
+                    couchdb.Server(self.server_url).create(self.name)
+                except:
+                    log_internal.exception('self.db.info() not working; sleeping.')
+                    time.sleep(0.1)
 
 
         # This dance is odd due to the semantics of how WVD works.
