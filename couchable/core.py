@@ -221,6 +221,7 @@ class CouchableDb(object):
         self.server = couchdb.Server(self.server_url)
 
         if not exists:
+            i = 1
             while True:
                 try:
                     self.db.info()
@@ -229,7 +230,8 @@ class CouchableDb(object):
                     couchdb.Server(self.server_url).create(self.name)
                 except:
                     log_internal.exception('self.db.info() not working; sleeping.')
-                    time.sleep(0.1)
+                    time.sleep(max(0.1 * i, 10))
+                    i += 1
 
 
         # This dance is odd due to the semantics of how WVD works.
@@ -455,7 +457,10 @@ class CouchableDb(object):
         for (obj, doc, attachment_dict, total_len) in mime_list:
             if '_rev' not in doc:
                 #print 'missing rev', doc['_id'], id(doc)
-                _, doc['_rev'] = self.db.save({'_id': doc['_id'], 'foo':'guess the post did not work'})
+                _, doc['_rev'] = self.db.save({'_id': doc['_id'], 'if you see this, multipart post failed': True})
+                obj._id = doc['id']
+                obj._rev = doc['_rev']
+                obj._couchableMultipartPending = True
 
             fileobj = cStringIO.StringIO()
 
@@ -494,6 +499,8 @@ class CouchableDb(object):
 
             obj._id = data_dict['id']
             obj._rev = data_dict['rev']
+            if hasattr(obj, '_couchableMultipartPending'):
+                del obj._couchableMultipartPending
 
             self._obj_by_id[obj._id] = obj
 
@@ -694,9 +701,10 @@ class CouchableDb(object):
 
         # Means this needs to be a new top-level document.
         if base_cls and not topLevel:
-            if self._additiveOnly and \
-                    getattr(data, '_id', None) != None and \
-                    getattr(data, '_rev', None) != None:
+            if self._additiveOnly \
+                    and getattr(data, '_id', None) is not None \
+                    and getattr(data, '_rev', None) is not None \
+                    and getattr(data, '_couchableMultipartPending', None) is None:
                 pass
             elif data not in self._skip_list:
                 self._store(data)
@@ -977,7 +985,7 @@ class CouchableDb(object):
             nameFormat_str = '{}[{}]'
 
         if topLevel:
-            private_keys = {k for k in data.keys() if k.startswith('_') and k not in ('_id', '_rev', '_attachments', '_cdb')}
+            private_keys = {k for k in data.keys() if k.startswith('_') and k not in ('_id', '_rev', '_attachments', '_cdb', '_couchableMultipartPending')}
         else:
             private_keys = set()
 
