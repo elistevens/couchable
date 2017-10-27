@@ -458,7 +458,7 @@ class CouchableDb(object):
             if '_rev' not in doc:
                 #print 'missing rev', doc['_id'], id(doc)
                 _, doc['_rev'] = self.db.save({'_id': doc['_id'], 'if you see this, multipart post failed': True})
-                obj._id = doc['id']
+                obj._id = doc['_id']
                 obj._rev = doc['_rev']
                 obj._couchableMultipartPending = True
 
