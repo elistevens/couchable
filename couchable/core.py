@@ -991,7 +991,7 @@ class CouchableDb(object):
 
         doc = {}
         for k,v in data.items():
-            if k not in private_keys and k not in set(['_attachments', '_cdb']):
+            if k not in private_keys and k not in set(['_attachments', '_cdb', '_couchableMultipartPending']):
                 if isObjDict:
                     k_str = str(k)
                 else:
