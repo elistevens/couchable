@@ -31,6 +31,7 @@ setup(
     packages=['couchable',],
     install_requires=[
             'CouchDb >= 0.8',
+            'requests',
         ],
     classifiers=[
             'Development Status :: 4 - Beta',
