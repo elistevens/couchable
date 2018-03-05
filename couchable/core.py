@@ -61,8 +61,7 @@ import couchdb.http
 import couchdb.json
 import couchdb.multipart
 
-"""
-"""
+import requests
 
 def importstr(module_str, from_=None):
     """
@@ -221,17 +220,10 @@ class CouchableDb(object):
         self.server = couchdb.Server(self.server_url)
 
         if not exists:
-            i = 1
-            while True:
-                try:
-                    self.db.info()
-                    break
-                except couchdb.http.ResourceNotFound:
-                    couchdb.Server(self.server_url).create(self.name)
-                except:
-                    log_internal.exception('self.db.info() not working; sleeping.')
-                    time.sleep(max(0.1 * i, 10))
-                    i += 1
+            if requests.head(self.url).status_code != 200:
+                put_dict = requests.put(self.url).json()
+                if 'ok' not in put_dict:
+                    raise Exception("Could not create DB: {!r}".format(put_dict))
 
 
         # This dance is odd due to the semantics of how WVD works.
